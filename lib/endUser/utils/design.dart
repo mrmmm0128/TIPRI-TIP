@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 class AppPalette {
   // ベース
   static const Color black = Color(0xFF000000);
-  static const Color white = Color(0xFFFFFFFF);
+  static const Color white = Colors.white;
 
   // ブランド黄色（画像のトーンに近い少し濃いめ）:
   // 必要ならここを差し替えるだけで全体が変わります

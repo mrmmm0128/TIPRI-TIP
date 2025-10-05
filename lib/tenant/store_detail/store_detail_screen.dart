@@ -32,7 +32,10 @@ class _StoreDetailSScreenState extends State<StoreDetailScreen> {
   int _currentIndex = 0;
 
   // 管理者判定
-  static const Set<String> _kAdminEmails = {'appfromkomeda@gmail.com'};
+  static const Set<String> _kAdminEmails = {
+    'appfromkomeda@gmail.com',
+    'tiprilogin@gmail.com',
+  };
   bool _isAdmin = false;
 
   String? tenantId;
@@ -1058,9 +1061,9 @@ class _StoreDetailSScreenState extends State<StoreDetailScreen> {
         foregroundColor: Colors.black87,
         automaticallyImplyLeading: false,
         elevation: 0,
-        toolbarHeight: 60,
-        titleSpacing: 16,
-
+        toolbarHeight: 53,
+        titleSpacing: 2,
+        surfaceTintColor: Colors.transparent,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1128,8 +1131,9 @@ class _StoreDetailSScreenState extends State<StoreDetailScreen> {
         ],
 
         bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: SizedBox(height: 1, child: ColoredBox(color: Colors.black12)),
+          // ← 余白出にくくする保険
+          preferredSize: Size.zero,
+          child: SizedBox.shrink(),
         ),
       ),
       endDrawer: isNarrow

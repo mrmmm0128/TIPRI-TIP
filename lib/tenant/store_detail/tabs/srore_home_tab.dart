@@ -5,7 +5,8 @@ import 'package:yourpay/fonts/jp_font.dart';
 import 'package:yourpay/tenant/widget/store_setting/subscription_card.dart';
 
 import 'package:yourpay/tenant/widget/store_home/chip_card.dart';
-import 'package:yourpay/tenant/widget/store_home/rank_entry.dart';
+import 'package:yourpay/tenant/widget/store_home/rank_entry.dart'
+    hide RecipientFilter, StaffAgg;
 import 'package:yourpay/tenant/widget/store_home/period_payment_page.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
@@ -749,17 +750,17 @@ class _StoreHomeTabState extends State<StoreHomeTab> {
 
     // === 置き換え: 以前の topCta 定義をこれに差し替え ===
     final topCta = Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // 左: タイトル
           const Expanded(
             child: Text(
-              'チップ売り上げ',
+              'チップまとめ',
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 17,
                 fontWeight: FontWeight.w800,
                 color: Colors.black87,
                 fontFamily: "LINEseed",
@@ -778,7 +779,7 @@ class _StoreHomeTabState extends State<StoreHomeTab> {
                   onPressed: _exportMonthlyReportPdf,
                   icon: const Icon(Icons.receipt_long, size: 25),
                   // ラベルは少しだけ短くして横幅を節約（処理は同じ）
-                  label: const Text('pdfで明細を確認する'),
+                  label: const Text('明細'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -1120,12 +1121,12 @@ class _StoreHomeTabState extends State<StoreHomeTab> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 10),
 
                   const Text(
-                    'スタッフランキング（上位10）',
+                    'スタッフランキング 上位10名',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: Colors.black87,
                       fontFamily: "LINEseed",

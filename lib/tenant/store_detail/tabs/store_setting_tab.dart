@@ -492,7 +492,7 @@ class _StoreSettingsTabState extends State<StoreSettingsTab> {
                       // 注意表示
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: Colors.orange.withOpacity(0.16),
                           borderRadius: BorderRadius.circular(10),
@@ -1405,347 +1405,121 @@ class _StoreSettingsTabState extends State<StoreSettingsTab> {
     return _connected!
         ? Theme(
             data: themed,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              // ★ ここで ValueListenableBuilder を使う：タップしただけでは走らない
-              child: ValueListenableBuilder<String>(
-                valueListenable: _tenantIdVN,
-                builder: (context, tid, _) {
-                  final uid = FirebaseAuth.instance.currentUser?.uid;
-                  if (uid == null) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+            child: ValueListenableBuilder<String>(
+              valueListenable: _tenantIdVN,
+              builder: (context, tid, _) {
+                final uid = FirebaseAuth.instance.currentUser?.uid;
+                if (uid == null) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                  // ★ 選択された tid から毎回“そのときだけ”参照を作る
-                  final tenantRef = FirebaseFirestore.instance
-                      .collection(widget.ownerId!)
-                      .doc(tid);
+                // ★ 選択された tid から毎回“そのときだけ”参照を作る
+                final tenantRef = FirebaseFirestore.instance
+                    .collection(widget.ownerId!)
+                    .doc(tid);
 
-                  final publicThankRef = FirebaseFirestore.instance
-                      .collection("publicThanks")
-                      .doc(tid);
+                final publicThankRef = FirebaseFirestore.instance
+                    .collection("publicThanks")
+                    .doc(tid);
 
-                  // ★ 正しい Stream（Doc の snapshots）を渡す
-                  return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    stream: tenantRef.snapshots(),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                // ★ 正しい Stream（Doc の snapshots）を渡す
+                return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: tenantRef.snapshots(),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snap.hasError) {
+                      return Center(child: Text('読み込みエラー: ${snap.error}'));
+                    }
+
+                    final data = snap.data?.data() ?? <String, dynamic>{};
+
+                    final sub =
+                        (data['subscription'] as Map?)
+                            ?.cast<String, dynamic>() ??
+                        {};
+                    final currentPlan = (sub['plan'] as String?) ?? 'A';
+
+                    final raw = sub['currentPeriodEnd'];
+                    DateTime? periodEnd;
+
+                    if (raw is Timestamp) {
+                      periodEnd = raw.toDate();
+                    } else if (raw is int) {
+                      // 10桁=秒, 13桁=ミリ秒 を自動判定
+                      final isSeconds = raw < 100000000000; // 1e11 未満なら秒
+                      periodEnd = DateTime.fromMillisecondsSinceEpoch(
+                        isSeconds ? raw * 1000 : raw,
+                      );
+                    } else if (raw is num) {
+                      final v = raw.toInt();
+                      final isSeconds = v < 100000000000;
+                      periodEnd = DateTime.fromMillisecondsSinceEpoch(
+                        isSeconds ? v * 1000 : v,
+                      );
+                    } else if (raw is String && raw.isNotEmpty) {
+                      // ISO文字列ならこれでOK。秒/ミリ秒の数値文字列なら int にして上と同様に処理してもOK
+                      periodEnd = DateTime.tryParse(raw);
+                    } else {
+                      periodEnd = null;
+                    }
+
+                    final periodEndBool = sub["cancelAtPeriodEnd"] ?? false;
+
+                    final extras =
+                        (sub['extras'] as Map?)?.cast<String, dynamic>() ?? {};
+                    _selectedPlan ??= currentPlan;
+                    if (_lineUrlCtrl.text.isEmpty) {
+                      _lineUrlCtrl.text =
+                          extras['lineOfficialUrl'] as String? ?? '';
+                    }
+                    if (_reviewUrlCtrl.text.isEmpty) {
+                      _reviewUrlCtrl.text =
+                          extras['googleReviewUrl'] as String? ?? '';
+                    }
+
+                    final store =
+                        (data['storeDeduction'] as Map?)
+                            ?.cast<String, dynamic>() ??
+                        {};
+                    if (_storePercentCtrl.text.isEmpty &&
+                        store['percent'] != null) {
+                      _storePercentCtrl.text = '${store['percent']}';
+                    }
+
+                    final trialMap = (sub['trial'] as Map?)
+                        ?.cast<String, dynamic>();
+                    DateTime? trialStart;
+                    DateTime? trialEnd;
+                    String? trialStatus;
+                    if (trialMap != null) {
+                      final tsStart = trialMap['trialStart'];
+                      final tsEnd = trialMap['trialEnd'];
+                      final tsStatus = trialMap["status"];
+                      if (tsStart is Timestamp) {
+                        trialStart = tsStart.toDate();
                       }
-                      if (snap.hasError) {
-                        return Center(child: Text('読み込みエラー: ${snap.error}'));
+                      if (tsEnd is Timestamp) {
+                        trialEnd = tsEnd.toDate();
                       }
-
-                      final data = snap.data?.data() ?? <String, dynamic>{};
-
-                      final sub =
-                          (data['subscription'] as Map?)
-                              ?.cast<String, dynamic>() ??
-                          {};
-                      final currentPlan = (sub['plan'] as String?) ?? 'A';
-
-                      final raw = sub['currentPeriodEnd'];
-                      DateTime? periodEnd;
-
-                      if (raw is Timestamp) {
-                        periodEnd = raw.toDate();
-                      } else if (raw is int) {
-                        // 10桁=秒, 13桁=ミリ秒 を自動判定
-                        final isSeconds = raw < 100000000000; // 1e11 未満なら秒
-                        periodEnd = DateTime.fromMillisecondsSinceEpoch(
-                          isSeconds ? raw * 1000 : raw,
-                        );
-                      } else if (raw is num) {
-                        final v = raw.toInt();
-                        final isSeconds = v < 100000000000;
-                        periodEnd = DateTime.fromMillisecondsSinceEpoch(
-                          isSeconds ? v * 1000 : v,
-                        );
-                      } else if (raw is String && raw.isNotEmpty) {
-                        // ISO文字列ならこれでOK。秒/ミリ秒の数値文字列なら int にして上と同様に処理してもOK
-                        periodEnd = DateTime.tryParse(raw);
-                      } else {
-                        periodEnd = null;
+                      if (tsEnd is Timestamp) {
+                        trialStatus = tsStatus;
                       }
+                    }
+                    final size = MediaQuery.of(context).size;
+                    final isNarrow = size.width < 480;
 
-                      final periodEndBool = sub["cancelAtPeriodEnd"] ?? false;
-
-                      final extras =
-                          (sub['extras'] as Map?)?.cast<String, dynamic>() ??
-                          {};
-                      _selectedPlan ??= currentPlan;
-                      if (_lineUrlCtrl.text.isEmpty) {
-                        _lineUrlCtrl.text =
-                            extras['lineOfficialUrl'] as String? ?? '';
-                      }
-                      if (_reviewUrlCtrl.text.isEmpty) {
-                        _reviewUrlCtrl.text =
-                            extras['googleReviewUrl'] as String? ?? '';
-                      }
-
-                      final store =
-                          (data['storeDeduction'] as Map?)
-                              ?.cast<String, dynamic>() ??
-                          {};
-                      if (_storePercentCtrl.text.isEmpty &&
-                          store['percent'] != null) {
-                        _storePercentCtrl.text = '${store['percent']}';
-                      }
-
-                      final trialMap = (sub['trial'] as Map?)
-                          ?.cast<String, dynamic>();
-                      DateTime? trialStart;
-                      DateTime? trialEnd;
-                      String? trialStatus;
-                      if (trialMap != null) {
-                        final tsStart = trialMap['trialStart'];
-                        final tsEnd = trialMap['trialEnd'];
-                        final tsStatus = trialMap["status"];
-                        if (tsStart is Timestamp) {
-                          trialStart = tsStart.toDate();
-                        }
-                        if (tsEnd is Timestamp) {
-                          trialEnd = tsEnd.toDate();
-                        }
-                        if (tsEnd is Timestamp) {
-                          trialStatus = tsStatus;
-                        }
-                      }
-                      final size = MediaQuery.of(context).size;
-                      final isNarrow = size.width < 480;
-
-                      return ListView(
-                        children: [
-                          // ===== ここから下はあなたの UI をそのまま（参照だけ tenantRef/publicThankRef を使う） =====
-                          ownerIsMe
-                              ? Column(
-                                  children: [
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: FilledButton.icon(
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: Colors.black,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 14,
-                                          ),
-                                        ),
-                                        onPressed: () => Navigator.pushNamed(
-                                          context,
-                                          '/account',
-                                          arguments: {
-                                            "tenantId": widget.tenantId,
-                                          },
-                                        ),
-                                        icon: const Icon(Icons.manage_accounts),
-                                        label: const Text('アカウント情報を確認'),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    isNarrow
-                                        ? Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.end,
-                                            children: [
-                                              if (widget.ownerId! == uid) ...[
-                                                Expanded(
-                                                  child: FilledButton.icon(
-                                                    style: FilledButton.styleFrom(
-                                                      backgroundColor:
-                                                          Colors.black,
-                                                      foregroundColor:
-                                                          Colors.white,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              12,
-                                                            ),
-                                                      ),
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 16,
-                                                            vertical: 14,
-                                                          ),
-                                                    ),
-                                                    onPressed: () =>
-                                                        Navigator.pushNamed(
-                                                          context,
-                                                          '/tenant',
-                                                          arguments: {
-                                                            "tenantId":
-                                                                widget.tenantId,
-                                                          },
-                                                        ),
-                                                    icon: const Icon(
-                                                      Icons
-                                                          .store_mall_directory_outlined,
-                                                    ),
-                                                    label: const Text(
-                                                      'テナント情報を確認',
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-
-                                              const SizedBox(width: 5),
-                                              _buildNotificationsAction(),
-                                            ],
-                                          )
-                                        : widget.ownerId! == uid
-                                        ? SizedBox(
-                                            width: double.infinity,
-                                            child: FilledButton.icon(
-                                              style: FilledButton.styleFrom(
-                                                backgroundColor: Colors.black,
-                                                foregroundColor: Colors.white,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 14,
-                                                    ),
-                                              ),
-                                              onPressed: () =>
-                                                  Navigator.pushNamed(
-                                                    context,
-                                                    '/tenant',
-                                                    arguments: {
-                                                      "tenantId":
-                                                          widget.tenantId,
-                                                    },
-                                                  ),
-                                              icon: const Icon(
-                                                Icons
-                                                    .store_mall_directory_outlined,
-                                              ),
-                                              label: const Text('テナント情報を確認'),
-                                            ),
-                                          )
-                                        : const SizedBox(height: 1),
-                                  ],
-                                )
-                              : const SizedBox(height: 4),
-                          const SizedBox(height: 16),
-
-                          const Text(
-                            'サブスクリプション',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          CardShell(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                    return ListView(
+                      children: [
+                        // ===== ここから下はあなたの UI をそのまま（参照だけ tenantRef/publicThankRef を使う） =====
+                        ownerIsMe
+                            ? Column(
                                 children: [
-                                  Wrap(
-                                    crossAxisAlignment:
-                                        WrapCrossAlignment.center,
-                                    spacing: 8,
-                                    runSpacing: 6,
-                                    children: [
-                                      PlanChip(label: '現在', dark: true),
-                                      Text(
-                                        'プラン $currentPlan',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-
-                                      // 説明ボタン（狭い時は次行へ自動回避）
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: TextButton.icon(
-                                          onPressed: () =>
-                                              showTipriInfoDialog(context),
-                                          icon: const Icon(Icons.info_outline),
-                                          label: const Text(
-                                            'チップリについて',
-                                            style: TextStyle(
-                                              color: Color(0xFFFCC400),
-                                            ),
-                                          ),
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: Colors.black87,
-                                          ),
-                                        ),
-                                      ),
-
-                                      if (periodEnd != null)
-                                        Text(
-                                          '${periodEndBool ? '終了予定' : '次回の請求'}: '
-                                          '${periodEnd.year}/${periodEnd.month.toString().padLeft(2, '0')}/${periodEnd.day.toString().padLeft(2, '0')}',
-                                          style: const TextStyle(
-                                            color: Colors.black54,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-
-                                  const SizedBox(height: 16),
-
-                                  if (trialStatus == "trialing")
-                                    TrialProgressBar(
-                                      trialStart: trialStart,
-                                      trialEnd: trialEnd!,
-                                      totalDays: 30,
-                                      onTap: () {},
-                                    ),
-                                  if (trialStatus == "none")
-                                    Text("トライアル期間は終了しました"),
-
-                                  const SizedBox(height: 12),
-
-                                  Builder(
-                                    builder: (_) {
-                                      final effectivePickerValue = _changingPlan
-                                          ? (_pendingPlan ?? currentPlan)
-                                          : currentPlan;
-                                      return Stack(
-                                        children: [
-                                          AbsorbPointer(
-                                            absorbing: !_changingPlan,
-                                            child: Opacity(
-                                              opacity: _changingPlan
-                                                  ? 1.0
-                                                  : 0.5,
-                                              child: PlanPicker(
-                                                selected: effectivePickerValue,
-                                                onChanged: _onPlanChanged,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-
-                                  const SizedBox(height: 16),
-
-                                  if (currentPlan == "B") ...[
-                                    buildBPerksSection(
-                                      tenantRef: FirebaseFirestore.instance
-                                          .collection(uid)
-                                          .doc(widget.tenantId),
-                                      thanksRef: FirebaseFirestore.instance
-                                          .collection('publicThanks')
-                                          .doc(widget.tenantId),
-                                      lineUrlCtrl: _lineUrlCtrl,
-                                      primaryBtnStyle: FilledButton.styleFrom(
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      style: FilledButton.styleFrom(
                                         backgroundColor: Colors.black,
                                         foregroundColor: Colors.white,
                                         shape: RoundedRectangleBorder(
@@ -1753,386 +1527,345 @@ class _StoreSettingsTabState extends State<StoreSettingsTab> {
                                             12,
                                           ),
                                         ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 14,
+                                        ),
                                       ),
+                                      onPressed: () => Navigator.pushNamed(
+                                        context,
+                                        '/account',
+                                        arguments: {
+                                          "tenantId": widget.tenantId,
+                                        },
+                                      ),
+                                      icon: const Icon(Icons.manage_accounts),
+                                      label: const Text('アカウント情報を確認'),
                                     ),
-                                  ],
-
-                                  if (currentPlan == 'C') ...[
-                                    buildCPerksSection(
-                                      tenantRef: tenantRef,
-                                      lineUrlCtrl: _lineUrlCtrl,
-                                      reviewUrlCtrl: _reviewUrlCtrl,
-                                      uploadingPhoto: _uploadingPhoto,
-                                      uploadingVideo: _uploadingVideo,
-                                      savingExtras: _savingExtras,
-                                      thanksPhotoPreviewBytes:
-                                          _thanksPhotoPreviewBytes,
-                                      thanksPhotoUrlLocal: _thanksPhotoUrl,
-                                      thanksVideoUrlLocal: _thanksVideoUrl,
-                                      onSaveExtras: () =>
-                                          _saveExtras(tenantRef),
-                                      onPickPhoto: () => _pickAndUploadPhoto(
-                                        tenantRef,
-                                        publicThankRef,
-                                      ),
-                                      onDeletePhoto: () => _deleteThanksPhoto(
-                                        tenantRef,
-                                        publicThankRef,
-                                      ),
-                                      onPreviewVideo: showVideoPreview,
-                                      primaryBtnStyle: primaryBtnStyle,
-                                      thanksRef: publicThankRef,
-                                    ),
-                                  ],
-
-                                  const SizedBox(height: 16),
-
-                                  if (!_changingPlan) ...[
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: FilledButton.icon(
-                                            style: primaryBtnStyle,
-                                            onPressed: widget.ownerId! != uid
-                                                ? () {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'オーナーのみ変更可能です',
-                                                          style: TextStyle(
-                                                            color: Colors.white,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  isNarrow
+                                      ? Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                          children: [
+                                            if (widget.ownerId! == uid) ...[
+                                              Expanded(
+                                                child: FilledButton.icon(
+                                                  style: FilledButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.black,
+                                                    foregroundColor:
+                                                        Colors.white,
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
                                                           ),
+                                                    ),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 14,
                                                         ),
+                                                  ),
+                                                  onPressed: () =>
+                                                      Navigator.pushNamed(
+                                                        context,
+                                                        '/tenant',
+                                                        arguments: {
+                                                          "tenantId":
+                                                              widget.tenantId,
+                                                        },
                                                       ),
-                                                    );
-                                                  }
-                                                : _updatingPlan
-                                                ? null
-                                                : _enterChangeMode,
-                                            icon: const Icon(Icons.tune),
-                                            label: currentPlan == ""
-                                                ? const Text('サブスクのプランを追加')
-                                                : periodEndBool
-                                                ? const Text('サブスクのプランを更新')
-                                                : const Text('サブスクのプランを変更'),
+                                                  icon: const Icon(
+                                                    Icons
+                                                        .store_mall_directory_outlined,
+                                                  ),
+                                                  label: const Text(
+                                                    'テナント情報を確認',
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+
+                                            const SizedBox(width: 5),
+                                            _buildNotificationsAction(),
+                                          ],
+                                        )
+                                      : widget.ownerId! == uid
+                                      ? SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.icon(
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: Colors.black,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                    vertical: 14,
+                                                  ),
+                                            ),
+                                            onPressed: () =>
+                                                Navigator.pushNamed(
+                                                  context,
+                                                  '/tenant',
+                                                  arguments: {
+                                                    "tenantId": widget.tenantId,
+                                                  },
+                                                ),
+                                            icon: const Icon(
+                                              Icons
+                                                  .store_mall_directory_outlined,
+                                            ),
+                                            label: const Text('テナント情報を確認'),
+                                          ),
+                                        )
+                                      : const SizedBox(height: 1),
+                                ],
+                              )
+                            : const SizedBox(height: 4),
+                        const SizedBox(height: 16),
+
+                        const Text(
+                          'サブスクリプション',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        CardShell(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: [
+                                    PlanChip(label: '現在', dark: true),
+                                    Text(
+                                      'プラン $currentPlan',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+
+                                    // 説明ボタン（狭い時は次行へ自動回避）
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: TextButton.icon(
+                                        onPressed: () =>
+                                            showTipriInfoDialog(context),
+                                        icon: const Icon(Icons.info_outline),
+                                        label: const Text(
+                                          'チップリについて',
+                                          style: TextStyle(
+                                            color: Color(0xFFFCC400),
+                                          ),
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+
+                                    if (periodEnd != null)
+                                      Text(
+                                        '${periodEndBool ? '終了予定' : '次回の請求'}: '
+                                        '${periodEnd.year}/${periodEnd.month.toString().padLeft(2, '0')}/${periodEnd.day.toString().padLeft(2, '0')}',
+                                        style: const TextStyle(
+                                          color: Colors.black54,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                if (trialStatus == "trialing")
+                                  TrialProgressBar(
+                                    trialStart: trialStart,
+                                    trialEnd: trialEnd!,
+                                    totalDays: 30,
+                                    onTap: () {},
+                                  ),
+                                if (trialStatus == "none")
+                                  Text("トライアル期間は終了しました"),
+
+                                const SizedBox(height: 12),
+
+                                Builder(
+                                  builder: (_) {
+                                    final effectivePickerValue = _changingPlan
+                                        ? (_pendingPlan ?? currentPlan)
+                                        : currentPlan;
+                                    return Stack(
+                                      children: [
+                                        AbsorbPointer(
+                                          absorbing: !_changingPlan,
+                                          child: Opacity(
+                                            opacity: _changingPlan ? 1.0 : 0.5,
+                                            child: PlanPicker(
+                                              selected: effectivePickerValue,
+                                              onChanged: _onPlanChanged,
+                                            ),
                                           ),
                                         ),
                                       ],
+                                    );
+                                  },
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                if (currentPlan == "B") ...[
+                                  buildBPerksSection(
+                                    tenantRef: FirebaseFirestore.instance
+                                        .collection(uid)
+                                        .doc(widget.tenantId),
+                                    thanksRef: FirebaseFirestore.instance
+                                        .collection('publicThanks')
+                                        .doc(widget.tenantId),
+                                    lineUrlCtrl: _lineUrlCtrl,
+                                    primaryBtnStyle: FilledButton.styleFrom(
+                                      backgroundColor: Colors.black,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
                                     ),
-                                  ] else ...[
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: FilledButton.icon(
-                                            style: primaryBtnStyle,
-                                            onPressed:
-                                                (_updatingPlan ||
-                                                    (_pendingPlan == null) ||
-                                                    (_pendingPlan ==
-                                                        currentPlan))
-                                                ? null
-                                                : () => _changePlan(
-                                                    tenantRef,
-                                                    _pendingPlan!,
-                                                  ),
-                                            icon: _updatingPlan
-                                                ? const SizedBox(
-                                                    width: 16,
-                                                    height: 16,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                          strokeWidth: 2,
+                                  ),
+                                ],
+
+                                if (currentPlan == 'C') ...[
+                                  buildCPerksSection(
+                                    tenantRef: tenantRef,
+                                    lineUrlCtrl: _lineUrlCtrl,
+                                    reviewUrlCtrl: _reviewUrlCtrl,
+                                    uploadingPhoto: _uploadingPhoto,
+                                    uploadingVideo: _uploadingVideo,
+                                    savingExtras: _savingExtras,
+                                    thanksPhotoPreviewBytes:
+                                        _thanksPhotoPreviewBytes,
+                                    thanksPhotoUrlLocal: _thanksPhotoUrl,
+                                    thanksVideoUrlLocal: _thanksVideoUrl,
+                                    onSaveExtras: () => _saveExtras(tenantRef),
+                                    onPickPhoto: () => _pickAndUploadPhoto(
+                                      tenantRef,
+                                      publicThankRef,
+                                    ),
+                                    onDeletePhoto: () => _deleteThanksPhoto(
+                                      tenantRef,
+                                      publicThankRef,
+                                    ),
+                                    onPreviewVideo: showVideoPreview,
+                                    primaryBtnStyle: primaryBtnStyle,
+                                    thanksRef: publicThankRef,
+                                  ),
+                                ],
+
+                                const SizedBox(height: 16),
+
+                                if (!_changingPlan) ...[
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: FilledButton.icon(
+                                          style: primaryBtnStyle,
+                                          onPressed: widget.ownerId! != uid
+                                              ? () {
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                        'オーナーのみ変更可能です',
+                                                        style: TextStyle(
                                                           color: Colors.white,
                                                         ),
-                                                  )
-                                                : const Icon(
-                                                    Icons.check_circle,
-                                                  ),
-                                            label: Text(
-                                              (_pendingPlan == currentPlan)
-                                                  ? '変更なし'
-                                                  : 'このプランに変更',
-                                            ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                              : _updatingPlan
+                                              ? null
+                                              : _enterChangeMode,
+                                          icon: const Icon(Icons.tune),
+                                          label: currentPlan == ""
+                                              ? const Text('サブスクのプランを追加')
+                                              : periodEndBool
+                                              ? const Text('サブスクのプランを更新')
+                                              : const Text('サブスクのプランを変更'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ] else ...[
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: FilledButton.icon(
+                                          style: primaryBtnStyle,
+                                          onPressed:
+                                              (_updatingPlan ||
+                                                  (_pendingPlan == null) ||
+                                                  (_pendingPlan == currentPlan))
+                                              ? null
+                                              : () => _changePlan(
+                                                  tenantRef,
+                                                  _pendingPlan!,
+                                                ),
+                                          icon: _updatingPlan
+                                              ? const SizedBox(
+                                                  width: 16,
+                                                  height: 16,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Colors.white,
+                                                      ),
+                                                )
+                                              : const Icon(Icons.check_circle),
+                                          label: Text(
+                                            (_pendingPlan == currentPlan)
+                                                ? '変更なし'
+                                                : 'このプランに変更',
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
-                                        OutlinedButton.icon(
-                                          style: outlinedBtnStyle,
-                                          onPressed: _updatingPlan
-                                              ? null
-                                              : _cancelChangeMode,
-                                          icon: const Icon(Icons.close),
-                                          label: const Text('やめる'),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                      ),
+                                      const SizedBox(width: 12),
+                                      OutlinedButton.icon(
+                                        style: outlinedBtnStyle,
+                                        onPressed: _updatingPlan
+                                            ? null
+                                            : _cancelChangeMode,
+                                        icon: const Icon(Icons.close),
+                                        label: const Text('やめる'),
+                                      ),
+                                    ],
+                                  ),
                                 ],
-                              ),
+                              ],
                             ),
                           ),
+                        ),
 
-                          const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                          if (_isCompactWidth(context)) ...[
-                            // スマホ・タブレット：ボタンだけ出して、押下でポップアップ
-                            const Text(
-                              "スタッフから差し引く金額を設定",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
-                                fontFamily: "LINEseed",
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-
-                            CardShell(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'スタッフにチップを満額渡しますか？',
-                                      style: TextStyle(
-                                        color: Colors.black87,
-                                        fontFamily: "LINEseed",
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    // 現在の設定だけ軽く見せる
-                                    StreamBuilder<
-                                      DocumentSnapshot<Map<String, dynamic>>
-                                    >(
-                                      stream: tenantRef.snapshots(),
-                                      builder: (context, snap2) {
-                                        final d2 = snap2.data?.data() ?? {};
-                                        final active =
-                                            (d2['storeDeduction'] as Map?) ??
-                                            {};
-                                        final activePercent =
-                                            (active['percent'] ?? 0).toString();
-                                        return Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.info_outline,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              '現在：$activePercent%',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-
-                                    const SizedBox(height: 12),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: FilledButton.icon(
-                                        onPressed: () =>
-                                            _openStoreDeductionSheet(
-                                              tenantRef,
-                                              data,
-                                            ),
-                                        icon: const Icon(Icons.tune),
-                                        label: const Text('設定を開く'),
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: Colors.black,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ] else ...[
-                            CardShell(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'スタッフにチップを満額渡しますか？',
-                                      style: TextStyle(
-                                        color: Colors.black87,
-                                        fontFamily: "LINEseed",
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    const SizedBox(height: 8),
-
-                                    Builder(
-                                      builder: (context) {
-                                        final pending =
-                                            (data['storeDeductionPending']
-                                                    as Map?)
-                                                ?.cast<String, dynamic>() ??
-                                            const {};
-                                        DateTime? eff;
-                                        final ts = pending['effectiveFrom'];
-                                        if (ts is Timestamp) eff = ts.toDate();
-                                        eff ??= _firstDayOfNextMonth();
-
-                                        return Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: Colors.orange.withOpacity(
-                                              0.16,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                            border: Border.all(
-                                              color: Colors.black12,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.schedule,
-                                                size: 18,
-                                                color: Colors.orange,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  'この変更は「今月分の明細」から自動適用されます。',
-                                                  style: const TextStyle(
-                                                    color: Colors.black87,
-                                                    fontFamily: "LINEseed",
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      },
-                                    ),
-
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: TextField(
-                                            key: const ValueKey(
-                                              'storePercentField',
-                                            ),
-                                            focusNode: _storePercentFocus,
-                                            controller: _storePercentCtrl,
-                                            decoration: const InputDecoration(
-                                              labelText: 'スタッフから店舗が差し引く金額（％）',
-                                              hintText: '例: 10 または 12.5',
-                                              suffixText: '%',
-                                            ),
-                                            keyboardType:
-                                                const TextInputType.numberWithOptions(
-                                                  decimal: true,
-                                                ),
-                                            inputFormatters: [
-                                              FilteringTextInputFormatter.allow(
-                                                RegExp(r'[0-9.]'),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 7),
-
-                                    StreamBuilder<
-                                      DocumentSnapshot<Map<String, dynamic>>
-                                    >(
-                                      stream: tenantRef.snapshots(),
-                                      builder: (context, snap2) {
-                                        final d2 = snap2.data?.data() ?? {};
-                                        final active =
-                                            (d2['storeDeduction'] as Map?) ??
-                                            {};
-
-                                        final activePercent =
-                                            (active['percent'] ?? 0).toString();
-
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.info_outline,
-                                                  size: 18,
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  '現在：$activePercent%',
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontFamily: "LINEseed",
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-
-                                            const SizedBox(height: 12),
-                                          ],
-                                        );
-                                      },
-                                    ),
-
-                                    const SizedBox(height: 12),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: FilledButton.icon(
-                                        onPressed: _savingStoreCut
-                                            ? null
-                                            : () => _saveStoreCut(tenantRef),
-                                        icon: _savingStoreCut
-                                            ? const SizedBox(
-                                                width: 16,
-                                                height: 16,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      color: Colors.white,
-                                                    ),
-                                              )
-                                            : const Icon(Icons.save),
-                                        label: const Text('店舗が差し引く金額割合を保存'),
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: Colors.black,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-
-                          const SizedBox(height: 16),
+                        if (_isCompactWidth(context)) ...[
+                          // スマホ・タブレット：ボタンだけ出して、押下でポップアップ
                           const Text(
-                            '管理者一覧',
+                            "スタッフから差し引く金額を設定",
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               color: Colors.black87,
@@ -2143,289 +1876,525 @@ class _StoreSettingsTabState extends State<StoreSettingsTab> {
 
                           CardShell(
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                              padding: const EdgeInsets.all(16),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  StreamBuilder<QuerySnapshot>(
-                                    stream: tenantRef
-                                        .collection('invites')
-                                        .where('status', isEqualTo: 'pending')
-                                        .snapshots(),
-                                    builder: (context, invSnap) {
-                                      final invites =
-                                          invSnap.data?.docs ?? const [];
-                                      if (invSnap.connectionState ==
-                                          ConnectionState.waiting) {
-                                        return const Padding(
-                                          padding: EdgeInsets.symmetric(
-                                            vertical: 8,
-                                          ),
-                                          child: LinearProgressIndicator(),
-                                        );
-                                      }
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                  const Text(
+                                    'スタッフにチップを満額渡しますか？',
+                                    style: TextStyle(
+                                      color: Colors.black87,
+                                      fontFamily: "LINEseed",
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+
+                                  // 現在の設定だけ軽く見せる
+                                  StreamBuilder<
+                                    DocumentSnapshot<Map<String, dynamic>>
+                                  >(
+                                    stream: tenantRef.snapshots(),
+                                    builder: (context, snap2) {
+                                      final d2 = snap2.data?.data() ?? {};
+                                      final active =
+                                          (d2['storeDeduction'] as Map?) ?? {};
+                                      final activePercent =
+                                          (active['percent'] ?? 0).toString();
+                                      return Row(
                                         children: [
-                                          const Text(
-                                            '承認待ちの招待',
-                                            style: TextStyle(
+                                          const Icon(
+                                            Icons.info_outline,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '現在：$activePercent%',
+                                            style: const TextStyle(
                                               fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
-                                              fontFamily: "LINEseed",
                                             ),
                                           ),
-                                          const SizedBox(height: 6),
-                                          if (invites.isEmpty)
-                                            const Text(
-                                              '承認待ちはありません',
-                                              style: TextStyle(
-                                                color: Colors.black54,
-                                                fontFamily: "LINEseed",
-                                              ),
-                                            )
-                                          else
-                                            ...invites.map((d) {
-                                              final m =
-                                                  d.data()
-                                                      as Map<String, dynamic>;
-                                              final email =
-                                                  (m['emailLower']
-                                                      as String?) ??
-                                                  '';
-                                              final expTs = m['expiresAt'];
-                                              final exp = expTs is Timestamp
-                                                  ? expTs.toDate()
-                                                  : null;
-                                              return ListTile(
-                                                dense: true,
-                                                contentPadding: EdgeInsets.zero,
-                                                leading: const Icon(
-                                                  Icons.pending_actions,
-                                                  color: Colors.orange,
-                                                ),
-                                                title: Text(
-                                                  email,
-                                                  style: const TextStyle(
-                                                    color: Colors.black87,
-                                                  ),
-                                                ),
-                                                subtitle: exp == null
-                                                    ? null
-                                                    : Text(
-                                                        '有効期限: ${exp.year}/${exp.month.toString().padLeft(2, '0')}/${exp.day.toString().padLeft(2, '0')}',
-                                                        style: const TextStyle(
-                                                          color: Colors.black54,
-                                                          fontFamily:
-                                                              "LINEseed",
-                                                        ),
-                                                      ),
-                                                trailing: Wrap(
-                                                  spacing: 8,
-                                                  children: [
-                                                    TextButton.icon(
-                                                      onPressed: () async {
-                                                        await _functions
-                                                            .httpsCallable(
-                                                              'inviteTenantAdmin',
-                                                            )
-                                                            .call({
-                                                              'tenantId': tid,
-                                                              'email': email,
-                                                            });
-                                                        if (!mounted) return;
-                                                        ScaffoldMessenger.of(
-                                                          context,
-                                                        ).showSnackBar(
-                                                          const SnackBar(
-                                                            content: Text(
-                                                              '招待メールを再送しました',
-                                                              style: TextStyle(
-                                                                color: Colors
-                                                                    .black,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                      icon: const Icon(
-                                                        Icons.send,
-                                                      ),
-                                                      label: const Text('再送'),
-                                                    ),
-                                                    TextButton.icon(
-                                                      onPressed: () async {
-                                                        await _functions
-                                                            .httpsCallable(
-                                                              'cancelTenantAdminInvite',
-                                                            )
-                                                            .call({
-                                                              'tenantId': tid,
-                                                              'inviteId': d.id,
-                                                            });
-                                                        if (!mounted) return;
-                                                        ScaffoldMessenger.of(
-                                                          context,
-                                                        ).showSnackBar(
-                                                          const SnackBar(
-                                                            content: Text(
-                                                              '招待を取り消しました',
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                      icon: const Icon(
-                                                        Icons.close,
-                                                      ),
-                                                      label: const Text('取消'),
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                            }),
-                                          const Divider(height: 24),
                                         ],
                                       );
                                     },
                                   ),
 
-                                  StreamBuilder<QuerySnapshot>(
-                                    stream: tenantRef
-                                        .collection('members')
-                                        .snapshots(),
-                                    builder: (context, memSnap) {
-                                      final members = memSnap.data?.docs ?? [];
-                                      final dataMap = data;
-
-                                      if (memSnap.hasData &&
-                                          members.isNotEmpty) {
-                                        return AdminList(
-                                          entries: members.map((m) {
-                                            final md =
-                                                m.data()
-                                                    as Map<String, dynamic>;
-                                            return AdminEntry(
-                                              uid: widget.ownerId!,
-                                              email:
-                                                  (md['email'] as String?) ??
-                                                  '',
-                                              name:
-                                                  (md['displayName']
-                                                      as String?) ??
-                                                  '',
-                                              role:
-                                                  (md['role'] as String?) ??
-                                                  'admin',
-                                            );
-                                          }).toList(),
-                                          onRemove: (uidToRemove) =>
-                                              _removeAdmin(
-                                                tenantRef,
-                                                uidToRemove,
-                                              ),
-                                        );
-                                      }
-
-                                      final uids =
-                                          (dataMap['memberUids'] as List?)
-                                              ?.cast<String>() ??
-                                          const <String>[];
-                                      if (uids.isEmpty) {
-                                        return const ListTile(
-                                          title: Text(
-                                            '管理者がいません',
-                                            style: TextStyle(
-                                              color: Colors.black87,
-                                            ),
-                                          ),
-                                          subtitle: Text(
-                                            '右上の追加ボタンから招待できます',
-                                            style: TextStyle(
-                                              color: Colors.black87,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                      return AdminList(
-                                        entries: uids
-                                            .map(
-                                              (u) => AdminEntry(
-                                                uid: u,
-                                                email: '',
-                                                name: '',
-                                                role: 'admin',
-                                              ),
-                                            )
-                                            .toList(),
-                                        onRemove: (uidToRemove) => _removeAdmin(
-                                          tenantRef,
-                                          uidToRemove,
-                                        ),
-                                      );
-                                    },
-                                  ),
-
+                                  const SizedBox(height: 12),
                                   Align(
                                     alignment: Alignment.centerRight,
-                                    child: TextButton.icon(
-                                      onPressed: () =>
-                                          _inviteAdminDialog(tenantRef),
-                                      icon: const Icon(Icons.person_add_alt_1),
-                                      label: const Text('管理者を追加（メール招待）'),
+                                    child: FilledButton.icon(
+                                      onPressed: () => _openStoreDeductionSheet(
+                                        tenantRef,
+                                        data,
+                                      ),
+                                      icon: const Icon(Icons.tune),
+                                      label: const Text('設定を開く'),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Colors.black,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Container(
-                            margin: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 16,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Colors.black26),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(999),
-                              onTap: logout,
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(
-                                  vertical: 12,
-                                  horizontal: 20,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.logout,
+                        ] else ...[
+                          CardShell(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'スタッフにチップを満額渡しますか？',
+                                    style: TextStyle(
                                       color: Colors.black87,
-                                      size: 18,
+                                      fontFamily: "LINEseed",
                                     ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'ログアウト',
-                                      style: TextStyle(
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w700,
-                                        fontFamily: "LINEseed",
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 8),
+
+                                  Builder(
+                                    builder: (context) {
+                                      final pending =
+                                          (data['storeDeductionPending']
+                                                  as Map?)
+                                              ?.cast<String, dynamic>() ??
+                                          const {};
+                                      DateTime? eff;
+                                      final ts = pending['effectiveFrom'];
+                                      if (ts is Timestamp) eff = ts.toDate();
+                                      eff ??= _firstDayOfNextMonth();
+
+                                      return Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withOpacity(
+                                            0.16,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.black12,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.schedule,
+                                              size: 18,
+                                              color: Colors.orange,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'この変更は「今月分の明細」から自動適用されます。',
+                                                style: const TextStyle(
+                                                  color: Colors.black87,
+                                                  fontFamily: "LINEseed",
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          key: const ValueKey(
+                                            'storePercentField',
+                                          ),
+                                          focusNode: _storePercentFocus,
+                                          controller: _storePercentCtrl,
+                                          decoration: const InputDecoration(
+                                            labelText: 'スタッフから店舗が差し引く金額（％）',
+                                            hintText: '例: 10 または 12.5',
+                                            suffixText: '%',
+                                          ),
+                                          keyboardType:
+                                              const TextInputType.numberWithOptions(
+                                                decimal: true,
+                                              ),
+                                          inputFormatters: [
+                                            FilteringTextInputFormatter.allow(
+                                              RegExp(r'[0-9.]'),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 7),
+
+                                  StreamBuilder<
+                                    DocumentSnapshot<Map<String, dynamic>>
+                                  >(
+                                    stream: tenantRef.snapshots(),
+                                    builder: (context, snap2) {
+                                      final d2 = snap2.data?.data() ?? {};
+                                      final active =
+                                          (d2['storeDeduction'] as Map?) ?? {};
+
+                                      final activePercent =
+                                          (active['percent'] ?? 0).toString();
+
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.info_outline,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                '現在：$activePercent%',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontFamily: "LINEseed",
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+
+                                          const SizedBox(height: 12),
+                                        ],
+                                      );
+                                    },
+                                  ),
+
+                                  const SizedBox(height: 12),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: FilledButton.icon(
+                                      onPressed: _savingStoreCut
+                                          ? null
+                                          : () => _saveStoreCut(tenantRef),
+                                      icon: _savingStoreCut
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Icon(Icons.save),
+                                      label: const Text('店舗が差し引く金額割合を保存'),
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: Colors.black,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ],
-                      );
-                    },
-                  );
-                },
-              ),
+
+                        const SizedBox(height: 16),
+                        const Text(
+                          '管理者一覧',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                            fontFamily: "LINEseed",
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        CardShell(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                StreamBuilder<QuerySnapshot>(
+                                  stream: tenantRef
+                                      .collection('invites')
+                                      .where('status', isEqualTo: 'pending')
+                                      .snapshots(),
+                                  builder: (context, invSnap) {
+                                    final invites =
+                                        invSnap.data?.docs ?? const [];
+                                    if (invSnap.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 8,
+                                        ),
+                                        child: LinearProgressIndicator(),
+                                      );
+                                    }
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          '承認待ちの招待',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black87,
+                                            fontFamily: "LINEseed",
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        if (invites.isEmpty)
+                                          const Text(
+                                            '承認待ちはありません',
+                                            style: TextStyle(
+                                              color: Colors.black54,
+                                              fontFamily: "LINEseed",
+                                            ),
+                                          )
+                                        else
+                                          ...invites.map((d) {
+                                            final m =
+                                                d.data()
+                                                    as Map<String, dynamic>;
+                                            final email =
+                                                (m['emailLower'] as String?) ??
+                                                '';
+                                            final expTs = m['expiresAt'];
+                                            final exp = expTs is Timestamp
+                                                ? expTs.toDate()
+                                                : null;
+                                            return ListTile(
+                                              dense: true,
+                                              contentPadding: EdgeInsets.zero,
+                                              leading: const Icon(
+                                                Icons.pending_actions,
+                                                color: Colors.orange,
+                                              ),
+                                              title: Text(
+                                                email,
+                                                style: const TextStyle(
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                              subtitle: exp == null
+                                                  ? null
+                                                  : Text(
+                                                      '有効期限: ${exp.year}/${exp.month.toString().padLeft(2, '0')}/${exp.day.toString().padLeft(2, '0')}',
+                                                      style: const TextStyle(
+                                                        color: Colors.black54,
+                                                        fontFamily: "LINEseed",
+                                                      ),
+                                                    ),
+                                              trailing: Wrap(
+                                                spacing: 8,
+                                                children: [
+                                                  TextButton.icon(
+                                                    onPressed: () async {
+                                                      await _functions
+                                                          .httpsCallable(
+                                                            'inviteTenantAdmin',
+                                                          )
+                                                          .call({
+                                                            'tenantId': tid,
+                                                            'email': email,
+                                                          });
+                                                      if (!mounted) return;
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text(
+                                                            '招待メールを再送しました',
+                                                            style: TextStyle(
+                                                              color:
+                                                                  Colors.black,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons.send,
+                                                    ),
+                                                    label: const Text('再送'),
+                                                  ),
+                                                  TextButton.icon(
+                                                    onPressed: () async {
+                                                      await _functions
+                                                          .httpsCallable(
+                                                            'cancelTenantAdminInvite',
+                                                          )
+                                                          .call({
+                                                            'tenantId': tid,
+                                                            'inviteId': d.id,
+                                                          });
+                                                      if (!mounted) return;
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text(
+                                                            '招待を取り消しました',
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons.close,
+                                                    ),
+                                                    label: const Text('取消'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }),
+                                        const Divider(height: 24),
+                                      ],
+                                    );
+                                  },
+                                ),
+
+                                StreamBuilder<QuerySnapshot>(
+                                  stream: tenantRef
+                                      .collection('members')
+                                      .snapshots(),
+                                  builder: (context, memSnap) {
+                                    final members = memSnap.data?.docs ?? [];
+                                    final dataMap = data;
+
+                                    if (memSnap.hasData && members.isNotEmpty) {
+                                      return AdminList(
+                                        entries: members.map((m) {
+                                          final md =
+                                              m.data() as Map<String, dynamic>;
+                                          return AdminEntry(
+                                            uid: widget.ownerId!,
+                                            email:
+                                                (md['email'] as String?) ?? '',
+                                            name:
+                                                (md['displayName']
+                                                    as String?) ??
+                                                '',
+                                          );
+                                        }).toList(),
+                                        onRemove: (uidToRemove) => _removeAdmin(
+                                          tenantRef,
+                                          uidToRemove,
+                                        ),
+                                      );
+                                    }
+
+                                    final uids =
+                                        (dataMap['memberUids'] as List?)
+                                            ?.cast<String>() ??
+                                        const <String>[];
+                                    if (uids.isEmpty) {
+                                      return const ListTile(
+                                        title: Text(
+                                          '管理者がいません',
+                                          style: TextStyle(
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          '右上の追加ボタンから招待できます',
+                                          style: TextStyle(
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return AdminList(
+                                      entries: uids
+                                          .map(
+                                            (u) => AdminEntry(
+                                              uid: uid,
+                                              email: '',
+                                              name: '',
+                                            ),
+                                          )
+                                          .toList(),
+                                      onRemove: (uidToRemove) =>
+                                          _removeAdmin(tenantRef, uidToRemove),
+                                    );
+                                  },
+                                ),
+
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: () =>
+                                        _inviteAdminDialog(tenantRef),
+                                    icon: const Icon(Icons.person_add_alt_1),
+                                    label: const Text('管理者を追加（メール招待）'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          margin: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.black26),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: logout,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 20,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.logout,
+                                    color: Colors.black87,
+                                    size: 18,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'ログアウト',
+                                    style: TextStyle(
+                                      color: Colors.black87,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: "LINEseed",
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
             ),
           )
         : Scaffold(

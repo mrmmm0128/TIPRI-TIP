@@ -195,6 +195,8 @@ class _EmployeePhoto extends StatelessWidget {
           url = d?['photoUrl'] as String?;
           name = d?['name'] as String?;
         }
+        print(url);
+        print(name);
 
         if (url != null && url.isNotEmpty) {
           return Image.network(

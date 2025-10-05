@@ -37,7 +37,10 @@ class LoadingPage extends StatelessWidget {
                   const SizedBox(
                     width: 28,
                     height: 28,
-                    child: CircularProgressIndicator(strokeWidth: 2.6),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.6,
+                      color: Colors.black,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   // メッセージ

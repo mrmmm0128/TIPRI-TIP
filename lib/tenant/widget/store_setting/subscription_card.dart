@@ -3,11 +3,16 @@ import 'package:flutter/material.dart';
 /// 白カード＋影（ネイティブ感のある入れ物）
 class CardShell extends StatelessWidget {
   final Widget child;
-  const CardShell({required this.child});
+  const CardShell({required this.child, super.key});
 
   @override
   Widget build(BuildContext context) {
+    // 余白は画面幅に応じて少し広げる
+    final w = MediaQuery.of(context).size.width;
+    final pad = w < 600 ? 12.0 : 16.0;
+
     return Container(
+      margin: EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -40,13 +45,10 @@ class PlanPicker extends StatefulWidget {
 }
 
 class _PlanPickerState extends State<PlanPicker> {
-  // 必要ならここに状態を追加してOK（例: 折りたたみ等）
-
   @override
   Widget build(BuildContext context) {
-    // 画面高さの1/4を基本に、最小/最大をクランプ
-    final screenH = MediaQuery.of(context).size.height;
-    final tileHeight = (screenH * 0.25).clamp(220.0, 420.0).toDouble();
+    // 画面高さを基準に、カードの最小/最大高さをブレークポイント別に調整
+    final h = MediaQuery.of(context).size.height;
 
     final plans = <PlanDef>[
       PlanDef(
@@ -61,7 +63,7 @@ class _PlanPickerState extends State<PlanPicker> {
         title: 'Bプラン',
         monthly: 3980,
         feePct: 25,
-        features: const ['決済手数料25%', '公式LINEリンクの掲載', "チップとともにコメントの送信"],
+        features: const ['決済手数料25%', '公式LINEリンクの掲載', 'チップとともにコメントの送信'],
       ),
       PlanDef(
         code: 'C',
@@ -71,7 +73,7 @@ class _PlanPickerState extends State<PlanPicker> {
         features: const [
           '決済手数料15%',
           '公式LINEリンクの掲載',
-          "チップとともにコメントの送信",
+          'チップとともにコメントの送信',
           'Googleレビュー導線の設置',
           'オリジナルポスター作成',
           'お客様への感謝動画',
@@ -81,38 +83,54 @@ class _PlanPickerState extends State<PlanPicker> {
 
     return LayoutBuilder(
       builder: (context, c) {
-        final isWide = c.maxWidth >= 900;
+        final w = c.maxWidth;
 
-        final children = plans.map((p) {
-          return _PlanTile(
-            plan: p,
-            selected: widget.selected == p.code,
-            onTap: () => widget.onChanged(p.code),
-            height: tileHeight, // ★ ここで注入！
-          );
-        }).toList();
+        // ===== ブレークポイント =====
+        // <600: 1カラム（スマホ）
+        // 600-899: 2カラム（タブレット縦/小さめ）
+        // >=900: 3カラム（タブレット横/デスクトップ）
+        final int crossAxisCount = w < 600 ? 1 : (w < 900 ? 2 : 3);
 
-        if (isWide) {
-          return Row(
-            children: [
-              Expanded(child: children[0]),
-              const SizedBox(width: 12),
-              Expanded(child: children[1]),
-              const SizedBox(width: 12),
-              Expanded(child: children[2]),
-            ],
-          );
-        } else {
-          return Column(
-            children: [
-              children[0],
-              const SizedBox(height: 12),
-              children[1],
-              const SizedBox(height: 12),
-              children[2],
-            ],
-          );
-        }
+        // 高さはブレークポイントごとに少し変える
+        final double tileHeight = () {
+          if (crossAxisCount == 1) {
+            // スマホはやや高めに（スクロール配慮）
+            return (h * 0.28).clamp(220.0, 460.0).toDouble();
+          } else if (crossAxisCount == 2) {
+            return (h * 0.26).clamp(220.0, 420.0).toDouble();
+          } else {
+            return (h * 0.24).clamp(220.0, 380.0).toDouble();
+          }
+        }();
+
+        // childAspectRatio は「幅/高さ」
+        // 横に並ぶほど 1.0 付近、縦並びはやや縦長に
+        final double childAspectRatio = () {
+          if (crossAxisCount == 1) return 16 / 10; // 少し横長に
+          if (crossAxisCount == 2) return 16 / 11;
+          return 16 / 12;
+        }();
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: childAspectRatio,
+          ),
+          itemCount: plans.length,
+          itemBuilder: (_, i) {
+            final p = plans[i];
+            return _PlanTile(
+              plan: p,
+              selected: widget.selected == p.code,
+              onTap: () => widget.onChanged(p.code),
+              height: tileHeight,
+            );
+          },
+        );
       },
     );
   }
@@ -121,11 +139,14 @@ class _PlanPickerState extends State<PlanPicker> {
 class PlanChip extends StatelessWidget {
   final String label;
   final bool dark;
-  const PlanChip({required this.label, this.dark = false});
+  const PlanChip({required this.label, this.dark = false, super.key});
   @override
   Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    final padH = w < 600 ? 8.0 : 10.0;
+    final padV = w < 600 ? 4.0 : 6.0;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
       decoration: BoxDecoration(
         color: dark ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(999),
@@ -134,8 +155,9 @@ class PlanChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: dark ? Colors.white : Colors.black87,
+          color: dark ? Colors.white : Colors.black,
           fontWeight: FontWeight.w700,
+          fontSize: w < 360 ? 12 : 14,
         ),
       ),
     );
@@ -162,20 +184,25 @@ class _PlanTile extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  /// 全カードを同じ高さにしたいときに指定（例: 220〜260くらい）
+  /// 全カードを同じ高さにしたいときに指定（例: 220〜460くらい）
   final double height;
 
   const _PlanTile({
     required this.plan,
     required this.selected,
     required this.onTap,
-    required this.height, // ← 好みで調整。全カードで同じ値を渡せばOK
+    required this.height,
   });
 
   @override
   Widget build(BuildContext context) {
-    final baseFg = selected ? Colors.white : Colors.black87;
-    final subFg = selected ? Colors.white70 : Colors.black54;
+    final baseFg = selected ? Colors.white : Colors.black;
+    final subFg = selected ? Colors.white70 : Colors.black;
+
+    // 幅が狭いときは少しタイポを小さめに
+    final w = MediaQuery.of(context).size.width;
+    final titleSize = w < 360 ? 15.0 : 16.0;
+    final priceSize = w < 360 ? 14.0 : 16.0;
 
     final tile = Material(
       color: selected ? Colors.black : Colors.black12,
@@ -186,7 +213,7 @@ class _PlanTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(w < 600 ? 14 : 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -194,9 +221,9 @@ class _PlanTile extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: w < 600 ? 8 : 10,
+                      vertical: w < 600 ? 4 : 6,
                     ),
                     decoration: BoxDecoration(
                       color: selected ? Colors.white : Colors.black,
@@ -207,24 +234,30 @@ class _PlanTile extends StatelessWidget {
                       style: TextStyle(
                         color: selected ? Colors.black : Colors.white,
                         fontWeight: FontWeight.w800,
+                        fontSize: w < 360 ? 12 : 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      plan.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: baseFg,
+                        fontWeight: FontWeight.w700,
+                        fontSize: titleSize,
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    plan.title,
-                    style: TextStyle(
-                      color: baseFg,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
                     plan.monthly == 0 ? '無料' : '¥${plan.monthly}',
                     style: TextStyle(
                       color: baseFg,
                       fontWeight: FontWeight.w700,
+                      fontSize: priceSize,
                     ),
                   ),
                 ],
@@ -247,14 +280,22 @@ class _PlanTile extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.check, size: 16, color: baseFg),
+                          Icon(
+                            Icons.check,
+                            size: w < 360 ? 14 : 16,
+                            color: baseFg,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               f,
-                              style: TextStyle(color: baseFg),
-                              maxLines: 2, // ← 行数制限したければ調整
-                              overflow: TextOverflow.fade, // ← or ellipsis
+                              style: TextStyle(
+                                color: baseFg,
+                                fontSize: w < 360 ? 12 : 14,
+                                height: 1.25,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -270,7 +311,10 @@ class _PlanTile extends StatelessWidget {
     );
 
     // 高さを統一
-    return SizedBox(height: height, child: tile);
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: height * 0.85, maxHeight: height),
+      child: tile,
+    );
   }
 }
 
@@ -278,60 +322,95 @@ class AdminEntry {
   final String uid;
   final String email;
   final String name;
-  final String role; // 'admin' など
-  AdminEntry({
-    required this.uid,
-    required this.email,
-    required this.name,
-    required this.role,
-  });
+
+  AdminEntry({required this.uid, required this.email, required this.name});
 }
 
 class AdminList extends StatelessWidget {
   final List<AdminEntry> entries;
   final ValueChanged<String> onRemove;
-  const AdminList({required this.entries, required this.onRemove});
+  const AdminList({required this.entries, required this.onRemove, super.key});
 
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) {
       return const ListTile(title: Text('管理者がいません'));
     }
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: entries.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (_, i) {
-        final e = entries[i];
-        final subtitle = [
-          if (e.name.isNotEmpty) e.name,
-          if (e.email.isNotEmpty) e.email,
-          '役割: ${e.role}',
-        ].join(' / ');
-        return ListTile(
-          leading: const CircleAvatar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            child: Icon(Icons.admin_panel_settings),
-          ),
-          title: Text(
-            e.uid,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.black87),
-          ),
-          subtitle: Text(
-            subtitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.black87),
-          ),
-          trailing: IconButton(
-            icon: const Icon(Icons.remove_circle_outline),
-            onPressed: () => onRemove(e.uid),
-            tooltip: '削除',
-          ),
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final isCompact = c.maxWidth < 420;
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: entries.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (_, i) {
+            final e = entries[i];
+            final name = e.name.trim();
+            final email = e.email.trim();
+
+            final title = isCompact
+                ? Text(
+                    // コンパクトでは1行にまとめる（省略）
+                    [
+                      if (name.isNotEmpty) name,
+                      if (email.isNotEmpty) email,
+                    ].join(' / '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.black87),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (name.isNotEmpty)
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      if (email.isNotEmpty)
+                        Text(
+                          email,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                    ],
+                  );
+
+            return ListTile(
+              dense: isCompact,
+              leading: const CircleAvatar(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                child: Icon(Icons.admin_panel_settings),
+              ),
+              title: title,
+              trailing: isCompact
+                  ? IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      tooltip: '削除',
+                      onPressed: () => onRemove(e.uid),
+                    )
+                  : Wrap(
+                      spacing: 8,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove_circle_outline),
+                          tooltip: '削除',
+                          onPressed: () => onRemove(e.uid),
+                        ),
+                      ],
+                    ),
+            );
+          },
         );
       },
     );

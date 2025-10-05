@@ -38,6 +38,31 @@ class _AccountDetailScreenState extends State<tenantDetailScreen> {
   bool _linkingAgency = false;
   Map<String, dynamic>? _agency; // {code, uid, name, linkedAt ...} を想定
 
+  // 画面サイズに応じてダイアログの最大幅・最大高を丸めるヘルパ
+  T _min<T extends num>(T a, T b) => a < b ? a : b;
+
+  Widget buildResponsiveDialogBox(
+    BuildContext context, {
+    required Widget child,
+    double maxWidth = 700, // PCやタブレットでの上限幅
+    double maxHeight = 520, // PCやタブレットでの上限高さ
+    double heightFactor = 0.85, // モバイルでは画面の○%までに抑える
+    EdgeInsets margin = const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  }) {
+    final size = MediaQuery.of(context).size;
+    final isNarrow = size.width < 600;
+
+    final w = isNarrow
+        ? (size.width - margin.horizontal) // ほぼ全幅
+        : _min(maxWidth, size.width - margin.horizontal);
+
+    final h = isNarrow
+        ? (size.height * heightFactor)
+        : _min(maxHeight, size.height - margin.vertical);
+
+    return SizedBox(width: w, height: h, child: child);
+  }
+
   bool _isZeroDecimal(String c) {
     const zero = {'JPY', 'KRW', 'VND'};
     return zero.contains(c.toUpperCase());
@@ -160,9 +185,10 @@ class _AccountDetailScreenState extends State<tenantDetailScreen> {
                           .toUpperCase();
                       return AlertDialog(
                         title: const Text('入金の詳細'),
-                        content: SizedBox(
-                          width: 700,
-                          height: 500,
+                        content: buildResponsiveDialogBox(
+                          ctx2,
+                          maxWidth: 700,
+                          maxHeight: 500,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -250,9 +276,10 @@ class _AccountDetailScreenState extends State<tenantDetailScreen> {
 
           return AlertDialog(
             title: const Text('入金履歴'),
-            content: SizedBox(
-              width: 700,
-              height: 520,
+            content: buildResponsiveDialogBox(
+              ctx,
+              maxWidth: 700,
+              maxHeight: 520,
               child: _payouts.isEmpty
                   ? const Center(child: Text('入金履歴はまだありません'))
                   : ListView.separated(
@@ -545,8 +572,10 @@ class _AccountDetailScreenState extends State<tenantDetailScreen> {
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
           title: const Text('次回の請求予定'),
-          content: SizedBox(
-            width: 700,
+          content: buildResponsiveDialogBox(
+            ctx,
+            maxWidth: 700,
+            maxHeight: 520,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1227,27 +1256,12 @@ class _AccountDetailScreenState extends State<tenantDetailScreen> {
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const Spacer(),
-                  OutlinedButton.icon(
-                    onPressed: _loadingInvoices
-                        ? null
-                        : () async {
-                            await _loadInvoices(_tenantId!);
-                            sbSet(() {});
-                          },
-                    icon: _loadingInvoices
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
-                    label: const Text('更新'),
-                  ),
                 ],
               ),
-              content: SizedBox(
-                width: 700,
-                height: 520,
+              content: buildResponsiveDialogBox(
+                ctx,
+                maxWidth: 700,
+                maxHeight: 520,
                 child: Column(
                   children: [
                     const TabBar(
@@ -1255,7 +1269,6 @@ class _AccountDetailScreenState extends State<tenantDetailScreen> {
                       tabs: [
                         Tab(text: 'すべて'),
                         Tab(text: '請求書'),
-                        Tab(text: '初期費用'),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -1313,6 +1326,7 @@ class _AccountDetailScreenState extends State<tenantDetailScreen> {
       final ok = await launchUrl(
         Uri.parse(url),
         mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_self',
       );
       if (!ok) throw 'ブラウザ起動に失敗しました';
     } on FirebaseFunctionsException catch (e) {

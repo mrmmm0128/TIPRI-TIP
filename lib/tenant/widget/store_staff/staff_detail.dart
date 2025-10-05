@@ -48,8 +48,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
   }
 
   // 公開ページのベースURL（末尾スラなし）
-  static const String _publicBase =
-      'https://venerable-mermaid-fcf8c8.netlify.app';
+  static const String _publicBase = 'https://tipri.jp';
 
   String _staffTipUrl(String tenantId, String employeeId, {int? initAmount}) {
     final qp = <String, String>{

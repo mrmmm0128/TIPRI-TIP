@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import 'package:yourpay/endUser/utils/design.dart';
 import 'package:yourpay/endUser/utils/fetchUidByTenantId.dart';
 import 'package:yourpay/endUser/utils/image_scrol.dart';
+import 'package:yourpay/tenant/widget/tipri_policy.dart';
 
 /// 黒フチ × 黄色の“縁取りテキスト”
 class StrokeText extends StatelessWidget {
@@ -160,6 +161,13 @@ class PublicStorePageState extends State<PublicStorePage> {
     super.didChangeDependencies();
     _loadFromRouteOrQuery();
     precacheImage(const AssetImage('assets/posters/tipri.png'), context);
+  }
+
+  Future<void> _openScta() async {
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => SctaImageViewer()));
   }
 
   // 追加：クエリ取得ヘルパー（? と # 両方対応）
@@ -731,6 +739,19 @@ class PublicStorePageState extends State<PublicStorePage> {
                       borderRadius: 12,
                     ),
                   ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                  label: const Text('特定商取引法に基づく表記'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black87,
+                    side: const BorderSide(color: Colors.black26),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: _openScta, // ← あとで _sctaUrl を差し替えるだけで遷移
                 ),
               ],
             ),

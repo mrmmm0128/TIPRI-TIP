@@ -566,7 +566,7 @@ async function sendTipNotification(tenantId, tipId, resendApiKey, uid) {
     const { Resend } = await Promise.resolve().then(() => __importStar(require("resend")));
     const resend = new Resend(resendApiKey);
     await resend.emails.send({
-        from: "TIPRI チップリ <sendtip_app@appfromkomeda.jp>",
+        from: "noreply@appfromkomeda.jp",
         to,
         subject,
         text,
@@ -697,10 +697,12 @@ const fmtMoney = (amt, ccy) => ccy === "JPY" ? `¥${Number(amt || 0).toLocaleStr
 exports.adminSetAgencyPassword = (0, https_1.onCall)({
     region: 'us-central1',
     memory: '256MiB',
-    cors: ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : true, // 何も無ければ全許可
+    cors: ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : true,
 }, async (req) => {
     const agentId = String(req.data?.agentId ?? '').trim();
     const newPassword = String(req.data?.password ?? '');
+    const loginId = String(req.data?.login ?? '').trim(); // ← 任意：ログインID表示用
+    const emailFromReq = String(req.data?.email ?? '').trim(); // ← 任意：宛先上書き
     if (!agentId || !newPassword) {
         throw new https_1.HttpsError('invalid-argument', 'agentId/password required');
     }
@@ -711,6 +713,11 @@ exports.adminSetAgencyPassword = (0, https_1.onCall)({
     const snap = await ref.get();
     if (!snap.exists)
         throw new https_1.HttpsError('not-found', 'agency not found');
+    // Firestore 上の代理店情報（名称・メールを拾う）
+    const agency = snap.data() || {};
+    const agencyName = String(agency.name ?? '').trim();
+    const agencyEmail = String(agency.email ?? '').trim();
+    // ハッシュ化して保存
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
     await ref.set({
@@ -718,6 +725,79 @@ exports.adminSetAgencyPassword = (0, https_1.onCall)({
         passwordSetAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+    // ここから：通知メール送信（失敗しても処理は成功扱い）
+    try {
+        // 宛先解決（優先：req.email → DB の email）
+        const to = (emailFromReq || agencyEmail || '').toLowerCase();
+        if (to) {
+            // === 文面生成 ===
+            const subject = '【TIPRI チップリ】代理店アカウントのパスワードが変更されました';
+            // ログイン URL（必要があれば正しいURLに差し替え）
+            const loginUrl = 'https://tipri.jp/agent-login';
+            // 日時（JST）
+            const updatedAtJst = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+            // 表示名（あれば）
+            const displayAgency = agencyName || '代理店ご担当者さま';
+            const text = [
+                '【TIPRI チップリ】代理店アカウントのパスワードが変更されました。',
+                '',
+                `■代理店名：${displayAgency}`,
+                loginId ? `■ログインID：${loginId}` : undefined,
+                `■変更日時（JST）：${updatedAtJst}`,
+                '',
+                '■ログインはこちら',
+                loginUrl,
+                '',
+                '※本メールにお心当たりがない場合は、至急パスワードの再設定を行い、',
+                '  下記お問い合わせ窓口までご連絡ください。',
+                '',
+                '--------------------------------',
+                '■お問い合わせ',
+                'チップリ運営窓口',
+                '56@zotman.jp',
+            ].filter(Boolean).join('\n');
+            const html = `
+<div style="font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; line-height:1.8; color:#111">
+  <p style="margin:0 0 10px;">【TIPRI チップリ】代理店アカウントのパスワードが変更されました。</p>
+
+  <p style="margin:14px 0 0;"><strong>■代理店名：</strong>${escapeHtml(displayAgency)}</p>
+  ${loginId ? `<p style="margin:10px 0 0;"><strong>■ログインID：</strong>${escapeHtml(loginId)}</p>` : ''}
+  <p style="margin:10px 0 0;"><strong>■変更日時（JST）：</strong>${escapeHtml(updatedAtJst)}</p>
+
+  <p style="margin:10px 0 4px;"><strong>■ログインはこちら</strong></p>
+  <p style="margin:0;">
+    <a href="${escapeHtml(loginUrl)}" target="_blank" rel="noopener">${escapeHtml(loginUrl)}</a>
+  </p>
+
+  <p style="margin:18px 0 0;">※本メールにお心当たりがない場合は、至急パスワードの再設定を行い、<br>下記お問い合わせ窓口までご連絡ください。</p>
+
+  <p style="margin:18px 0 0;">--------------------------------</p>
+  <p style="margin:6px 0 0;"><strong>■お問い合わせ</strong><br>
+    チップリ運営窓口<br>
+    <a href="mailto:56@zotman.jp">56@zotman.jp</a>
+  </p>
+</div>
+        `.trim();
+            // 送信
+            const { Resend } = await Promise.resolve().then(() => __importStar(require("resend")));
+            const resend = new Resend(RESEND_API_KEY.value());
+            // 送信（From／ドメインは運用中のものに合わせて）
+            await resend.emails.send({
+                from: 'noreply@appfromkomeda.jp',
+                to: [to],
+                subject,
+                text,
+                html,
+            });
+        }
+        else {
+            console.warn(`[adminSetAgencyPassword] email not found for agentId=${agentId}, skip sending`);
+        }
+    }
+    catch (mailErr) {
+        console.warn('[adminSetAgencyPassword] mail failed:', mailErr);
+        // メール失敗は処理継続（パスワード変更は成功）
+    }
     return { ok: true };
 });
 exports.agentLogin = (0, https_1.onCall)({

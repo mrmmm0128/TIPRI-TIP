@@ -131,7 +131,7 @@ class SplitMetricsRow extends StatelessWidget {
                 _showPayoutInfoSheet(context, isStore: true), // はてな
           ),
         ),
-        const SizedBox(width: 12),
+
         Expanded(
           child: _MetricCardMini(
             icon: Icons.person,
@@ -168,7 +168,7 @@ class _MetricCardMini extends StatelessWidget {
   Widget build(BuildContext context) {
     return CardShell(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -24,6 +24,10 @@ class StaffThanksVideoManager extends StatefulWidget {
 }
 
 class _StaffThanksVideoManagerState extends State<StaffThanksVideoManager> {
+  // ===== Breakpoints =====
+  static const double _bpCompact = 520; // ~スマホ縦
+  static const double _bpMedium = 900; // タブレット/小さめPC
+
   CollectionReference<Map<String, dynamic>> get _videosCol => FirebaseFirestore
       .instance
       .collection('publicThanks')
@@ -230,26 +234,31 @@ class _StaffThanksVideoManagerState extends State<StaffThanksVideoManager> {
   Future<void> _preview(String url) async {
     await showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (_) => _VideoPreviewDialog(url: url),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.staffName == null
-        ? 'Thanks動画'
-        : '${widget.staffName} の Thanks動画';
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            LayoutBuilder(
+    final pageTitle = '${widget.staffName} の Thanks動画';
+
+    return Center(
+      // ワイド画面で読みやすい最大幅を設定
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980),
+        child: Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
               builder: (context, constraints) {
-                final isNarrow = constraints.maxWidth < 520;
+                final w = constraints.maxWidth;
+                final isCompact = w < _bpCompact;
+                final isMedium = w >= _bpCompact && w < _bpMedium;
 
                 final uploadBtn = OutlinedButton.icon(
                   onPressed: _pickAndUpload,
@@ -257,12 +266,13 @@ class _StaffThanksVideoManagerState extends State<StaffThanksVideoManager> {
                   label: const Text('動画をアップロード'),
                 );
 
-                if (isNarrow) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ===== Header (responsive) =====
+                    if (isCompact) ...[
                       Text(
-                        title,
+                        pageTitle,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -270,115 +280,186 @@ class _StaffThanksVideoManagerState extends State<StaffThanksVideoManager> {
                       ),
                       const SizedBox(height: 8),
                       SizedBox(width: double.infinity, child: uploadBtn),
-                    ],
-                  );
-                } else {
-                  return Row(
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      uploadBtn,
-                    ],
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _videosCol
-                  .orderBy('order', descending: false)
-                  .snapshots(),
-              builder: (context, snap) {
-                if (snap.hasError) {
-                  return ListTile(
-                    leading: const Icon(Icons.error_outline, color: Colors.red),
-                    title: const Text('読み込みに失敗しました'),
-                    subtitle: Text('${snap.error}'),
-                  );
-                }
-                if (!snap.hasData) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(12),
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                }
-                final docs = snap.data!.docs;
-                if (docs.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Text(
-                      'まだ動画はありません。右上の「動画をアップロード」から追加してください。',
-                      style: TextStyle(color: Colors.black54),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: docs.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final d = docs[i];
-                    final m = d.data();
-                    final title =
-                        (m['title'] as String?) ??
-                        (m['name'] as String? ?? '動画');
-                    final published = (m['published'] as bool?) ?? false;
-                    final url = (m['url'] as String?) ?? '';
-                    final createdAt = (m['createdAt'] as Timestamp?);
-                    final when = createdAt == null
-                        ? ''
-                        : _fmt(createdAt.toDate());
-
-                    return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.movie)),
-                      title: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(when),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    ] else ...[
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 8,
                         children: [
-                          Switch(
-                            value: published,
-                            onChanged: (v) => _togglePublish(d.id, v),
+                          Text(
+                            pageTitle,
+                            style: TextStyle(
+                              fontSize: isMedium ? 18 : 20,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                          IconButton(
-                            tooltip: '再生',
-                            onPressed: url.isEmpty ? null : () => _preview(url),
-                            icon: const Icon(Icons.play_circle_fill),
-                          ),
-                          IconButton(
-                            tooltip: '名前変更',
-                            onPressed: () => _rename(d.id, title),
-                            icon: const Icon(Icons.edit),
-                          ),
-                          IconButton(
-                            tooltip: '削除',
-                            onPressed: () => _deleteVideo(m, d.id),
-                            icon: const Icon(Icons.delete_outline),
-                          ),
+                          uploadBtn,
                         ],
                       ),
-                      onTap: url.isEmpty ? null : () => _preview(url),
-                    );
-                  },
+                    ],
+                    const SizedBox(height: 12),
+
+                    // ===== List (responsive items) =====
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: _videosCol
+                          .orderBy('order', descending: false)
+                          .snapshots(),
+                      builder: (context, snap) {
+                        if (snap.hasError) {
+                          return ListTile(
+                            leading: const Icon(
+                              Icons.error_outline,
+                              color: Colors.red,
+                            ),
+                            title: const Text('読み込みに失敗しました'),
+                            subtitle: Text('${snap.error}'),
+                          );
+                        }
+                        if (!snap.hasData) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+                        final docs = snap.data!.docs;
+                        if (docs.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Text(
+                              'まだ動画はありません。右上の「動画をアップロード」から追加してください。',
+                              style: TextStyle(color: Colors.black54),
+                            ),
+                          );
+                        }
+
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: docs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final d = docs[i];
+                            final m = d.data();
+                            final title =
+                                (m['title'] as String?) ??
+                                (m['name'] as String? ?? '動画');
+                            final published =
+                                (m['published'] as bool?) ?? false;
+                            final url = (m['url'] as String?) ?? '';
+                            final createdAt = (m['createdAt'] as Timestamp?);
+                            final when = createdAt == null
+                                ? ''
+                                : _fmt(createdAt.toDate());
+
+                            // trailing は Wrap で折り返し → 狭い時も崩れない
+                            final trailingControls = Wrap(
+                              alignment: WrapAlignment.end,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text('公開'),
+                                    Switch(
+                                      value: published,
+                                      onChanged: (v) => _togglePublish(d.id, v),
+                                    ),
+                                  ],
+                                ),
+                                IconButton(
+                                  tooltip: '再生',
+                                  onPressed: url.isEmpty
+                                      ? null
+                                      : () => _preview(url),
+                                  icon: const Icon(Icons.play_circle_fill),
+                                ),
+                                IconButton(
+                                  tooltip: '名前変更',
+                                  onPressed: () => _rename(d.id, title),
+                                  icon: const Icon(Icons.edit),
+                                ),
+                                IconButton(
+                                  tooltip: '削除',
+                                  onPressed: () => _deleteVideo(m, d.id),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            );
+
+                            // コンパクト時は情報を2行に整理
+                            final isThreeLine = w < _bpCompact;
+
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              leading: const CircleAvatar(
+                                child: Icon(Icons.movie),
+                              ),
+                              title: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: isThreeLine
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(when),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              published
+                                                  ? Icons.visibility
+                                                  : Icons.visibility_off,
+                                              size: 16,
+                                              color: published
+                                                  ? Colors.green
+                                                  : Colors.grey,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              published ? '公開中' : '非公開',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: published
+                                                    ? Colors.green
+                                                    : Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    )
+                                  : Text(when),
+                              trailing: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  // ボタン群がはみ出さないように最大幅を画面幅の 55% に制限
+                                  maxWidth: w * 0.55,
+                                ),
+                                child: trailingControls,
+                              ),
+                              onTap: url.isEmpty ? null : () => _preview(url),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 );
               },
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -418,36 +499,68 @@ class _VideoPreviewDialogState extends State<_VideoPreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      contentPadding: const EdgeInsets.all(8),
-      content: AspectRatio(
-        aspectRatio: _controller?.value.aspectRatio == 0
-            ? 16 / 9
-            : (_controller?.value.aspectRatio ?? 16 / 9),
-        child: _controller != null && _controller!.value.isInitialized
-            ? Stack(
-                children: [
-                  VideoPlayer(_controller!),
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: VideoProgressIndicator(
-                      _controller!,
-                      allowScrubbing: true,
-                    ),
+    // 画面サイズに応じてダイアログを 90% までに制限、縦横どちらでも見やすく
+    final size = MediaQuery.of(context).size;
+    final maxW = size.width * 0.9;
+    final maxH = size.height * 0.9;
+
+    final ar = (_controller?.value.aspectRatio ?? 16 / 9);
+    // 希望幅高さをアスペクト比を保って決定
+    double w = maxW;
+    double h = w / ar;
+    if (h > maxH) {
+      h = maxH;
+      w = h * ar;
+    }
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: w, maxHeight: maxH),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: ar,
+                    child:
+                        _controller != null && _controller!.value.isInitialized
+                        ? Stack(
+                            children: [
+                              VideoPlayer(_controller!),
+                              Align(
+                                alignment: Alignment.bottomCenter,
+                                child: VideoProgressIndicator(
+                                  _controller!,
+                                  allowScrubbing: true,
+                                ),
+                              ),
+                            ],
+                          )
+                        : const SizedBox(
+                            height: 180,
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
                   ),
-                ],
-              )
-            : const SizedBox(
-                height: 180,
-                child: Center(child: CircularProgressIndicator()),
+                ),
               ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('閉じる'),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('閉じる'),
+                ),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }

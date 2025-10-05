@@ -392,7 +392,8 @@ Widget buildCPerksSection({
 
           // ===== 動画（表示のみ。登録は別画面というあなたの方針を尊重） =====
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: 96,
@@ -414,9 +415,7 @@ Widget buildCPerksSection({
                           : const Icon(Icons.movie, size: 32)),
               ),
               const SizedBox(width: 12),
-              const Expanded(
-                child: Text('チップを贈ってくれた方にお礼の動画を提供しましょう。\nスタッフ詳細画面から登録してください。'),
-              ),
+              const Expanded(child: Text('スタッフ詳細画面からお礼動画を登録してください。')),
             ],
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle; // ★ 追加：規約�
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:yourpay/tenant/widget/tipri_policy.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -61,19 +62,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_error != null) setState(() => _error = null);
   }
 
-  // クラス内（_LoginScreenState のフィールド）に追記
-  String? _sctaUrl = 'https://example.com/legal/scta'; // ← あとで本番URLに差し替え
-
+  // ① ここを書き換え
   Future<void> _openScta() async {
-    final url = _sctaUrl;
-    if (url == null || url.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('現在準備中です。後日掲載します。')));
-      return;
-    }
-    await launchUrlString(url, mode: LaunchMode.externalApplication);
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => SctaImageViewer()));
   }
 
   Widget _requiredLabel(String text) {
@@ -147,7 +141,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              const Divider(height: 1, color: Colors.black),
               Expanded(
                 child: Markdown(
                   data: text,
@@ -244,9 +238,7 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              email != null
-                  ? '「$email」に送信された認証メールのリンクを開いてください。 \n 件名:Verify your email for yourpay-c5aaf'
-                  : '登録したメールアドレスに送った認証メールのリンクを開いてください。\n 件名:Verify your email for yourpay-c5aaf',
+              'メールアドレスに送信される認証メールのリンクから認証してください。\n 件名:Verify your email for yourpay-c5aaf',
             ),
             const SizedBox(height: 8),
             const Text(
@@ -515,7 +507,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: Colors.grey[100],
+        backgroundColor: Colors.white,
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -585,28 +577,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                       const SizedBox(height: 10),
                                       Row(
                                         children: [
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.black,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                            padding: const EdgeInsets.all(8),
-                                            child: const Icon(
-                                              Icons.lock,
-                                              color: Colors.white,
-                                              size: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Text(
-                                            title,
-                                            style: const TextStyle(
-                                              fontSize: 22,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.black87,
-                                            ),
-                                          ),
+                                          // Container(
+                                          //   decoration: BoxDecoration(
+                                          //     color: Colors.black,
+                                          //     borderRadius:
+                                          //         BorderRadius.circular(10),
+                                          //   ),
+                                          //   padding: const EdgeInsets.all(8),
+                                          //   child: const Icon(
+                                          //     Icons.lock,
+                                          //     color: Colors.white,
+                                          //     size: 15,
+                                          //   ),
+                                          // ),
+                                          // const SizedBox(width: 10),
+                                          // Text(
+                                          //   title,
+                                          //   style: const TextStyle(
+                                          //     fontSize: 16,
+                                          //     fontWeight: FontWeight.w600,
+                                          //     color: Colors.black87,
+                                          //   ),
+                                          // ),
                                         ],
                                       ),
                                       const SizedBox(height: 16),
@@ -1029,7 +1021,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
 
-                        const Divider(height: 1),
+                        const Divider(height: 1, color: Colors.black),
                         const SizedBox(height: 12),
 
                         // ▼ ここから追加：フッター法令類リンク

@@ -440,7 +440,6 @@ class _StoreStaffTabState extends State<StoreStaffTab> {
     // FABに合わせた動的余白
     final mq = MediaQuery.of(context);
     const fabHeight = 44.0;
-    const fabBottomMargin = 16.0;
 
     final primaryBtnStyle = FilledButton.styleFrom(
       minimumSize: const Size(0, fabHeight),
@@ -455,116 +454,111 @@ class _StoreStaffTabState extends State<StoreStaffTab> {
             data: _withLineSeed(Theme.of(context)),
             child: Stack(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _qrAllLinkCard(_allStaffUrl()),
-                            const SizedBox(width: 5),
-                            FilledButton.icon(
-                              style: primaryBtnStyle,
-                              onPressed: _openAddEmployeeDialog,
-                              icon: const Icon(Icons.person_add_alt_1),
-                              label: const Text('スタッフ追加'),
-                            ),
-                          ],
-                        ),
+                Column(
+                  children: [
+                    Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _qrAllLinkCard(_allStaffUrl()),
+                          const SizedBox(width: 5),
+                          FilledButton.icon(
+                            style: primaryBtnStyle,
+                            onPressed: _openAddEmployeeDialog,
+                            icon: const Icon(Icons.person_add_alt_1),
+                            label: const Text('スタッフ追加'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collection(widget.ownerId!)
-                              .doc(widget.tenantId)
-                              .collection('employees')
-                              .orderBy('createdAt', descending: true)
-                              .snapshots(),
-                          builder: (context, snap) {
-                            if (snap.hasError) {
-                              return Center(
-                                child: Text('読み込みエラー: ${snap.error}'),
-                              );
-                            }
-                            if (!snap.hasData) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            final docs = snap.data!.docs;
-                            if (docs.isEmpty) {
-                              return Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Text(
-                                      'まだ社員がいません',
-                                      style: TextStyle(color: Colors.black87),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    OutlinedButton.icon(
-                                      onPressed: _openAddEmployeeDialog,
-                                      icon: const Icon(Icons.person_add),
-                                      label: const Text('最初の社員を追加'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.black87,
-                                        side: const BorderSide(
-                                          color: Colors.black87,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            final entries = List.generate(docs.length, (i) {
-                              final doc = docs[i];
-                              final d = docs[i].data() as Map<String, dynamic>;
-                              final empId = doc.id;
-                              return StaffEntry(
-                                index: i + 1,
-                                name: (d['name'] ?? '') as String,
-                                email: (d['email'] ?? '') as String,
-                                photoUrl: (d['photoUrl'] ?? '') as String,
-                                comment: (d['comment'] ?? '') as String,
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => StaffDetailScreen(
-                                        tenantId: widget.tenantId,
-                                        employeeId: empId,
-                                        ownerId: widget.ownerId!,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            });
-
-                            return Padding(
-                              padding: EdgeInsets.only(bottom: 0),
-                              child: StaffGalleryGrid(entries: entries),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection(widget.ownerId!)
+                            .doc(widget.tenantId)
+                            .collection('employees')
+                            .orderBy('createdAt', descending: true)
+                            .snapshots(),
+                        builder: (context, snap) {
+                          if (snap.hasError) {
+                            return Center(
+                              child: Text('読み込みエラー: ${snap.error}'),
                             );
-                          },
-                        ),
+                          }
+                          if (!snap.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          final docs = snap.data!.docs;
+                          if (docs.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'まだ社員がいません',
+                                    style: TextStyle(color: Colors.black87),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    onPressed: _openAddEmployeeDialog,
+                                    icon: const Icon(Icons.person_add),
+                                    label: const Text('最初の社員を追加'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.black87,
+                                      side: const BorderSide(
+                                        color: Colors.black87,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          final entries = List.generate(docs.length, (i) {
+                            final doc = docs[i];
+                            final d = docs[i].data() as Map<String, dynamic>;
+                            final empId = doc.id;
+                            return StaffEntry(
+                              index: i + 1,
+                              name: (d['name'] ?? '') as String,
+                              email: (d['email'] ?? '') as String,
+                              photoUrl: (d['photoUrl'] ?? '') as String,
+                              comment: (d['comment'] ?? '') as String,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => StaffDetailScreen(
+                                      tenantId: widget.tenantId,
+                                      employeeId: empId,
+                                      ownerId: widget.ownerId!,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          });
+
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: 0),
+                            child: StaffGalleryGrid(entries: entries),
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
 
                 // Positioned(

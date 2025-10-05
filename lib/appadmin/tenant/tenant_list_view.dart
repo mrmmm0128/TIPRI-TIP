@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:yourpay/appadmin/admin_dashboard_screen.dart';
 import 'package:yourpay/appadmin/tenant/tenant_detail.dart';
 import 'package:yourpay/appadmin/tenant/tenant_tile.dart';
 import 'package:yourpay/appadmin/util.dart';
@@ -11,11 +12,18 @@ class TenantsListView extends StatelessWidget {
   final SortBy sortBy;
   final DateTime? rangeStart;
   final DateTime? rangeEndEx;
+
+  // ★ 追加: フィルタ条件
+  final Tri initialPaid; // 初期費用 status == 'paid'
+  final Tri subActive; // subscription.status in {active, trialing}
+  final Tri connectCreated; // connect.charges_enabled == true
+
   final Future<Revenue> Function({
     required String tenantId,
     required String ownerUid,
   })
   loadRevenueForTenant;
+
   final String Function(int) yen;
   final String Function(DateTime) ymd;
 
@@ -30,11 +38,14 @@ class TenantsListView extends StatelessWidget {
     required this.loadRevenueForTenant,
     required this.yen,
     required this.ymd,
+    this.initialPaid = Tri.any,
+    this.subActive = Tri.any,
+    this.connectCreated = Tri.any,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 1) まず tenantIndex を購読して ownerUid/tenantId のペアだけ取得
+    // 1) tenantIndex を購読して ownerUid/tenantId ペア取得
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('tenantIndex').snapshots(),
       builder: (context, snap) {
@@ -56,7 +67,7 @@ class TenantsListView extends StatelessWidget {
           return const Center(child: Text('店舗がありません'));
         }
 
-        // 2) 本体ドキュメントを一括 get（重いが確実）
+        // 2) 各オーナー配下の本体ドキュメントを get
         return FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
           future: Future.wait(
             pairs.map(
@@ -96,11 +107,36 @@ class TenantsListView extends StatelessWidget {
             }
 
             Timestamp? _ts(dynamic v) => v is Timestamp ? v : null;
+
             bool _chargesEnabledOf(Map<String, dynamic> m) =>
                 (m['connect'] is Map) &&
                 (((m['connect'] as Map)['charges_enabled']) == true);
 
-            // 3) クライアント側で検索・フィルタ・ソート（すべて owner 本体基準）
+            String _initialStatusOf(Map<String, dynamic> m) {
+              final a = (m['initialFee'] is Map)
+                  ? (m['initialFee'] as Map)['status']
+                  : null;
+              final b =
+                  (m['billing'] is Map &&
+                      (m['billing'] as Map)['initialFee'] is Map)
+                  ? ((m['billing'] as Map)['initialFee'] as Map)['status']
+                  : null;
+              return _s(a ?? b).trim().isEmpty ? 'none' : _s(a ?? b);
+            }
+
+            String _subStatusOf(Map<String, dynamic> m) {
+              final sub = (m['subscription'] is Map)
+                  ? (m['subscription'] as Map)
+                  : const <String, dynamic>{};
+              return _s(sub['status']).trim();
+            }
+
+            bool _isSubActive(Map<String, dynamic> m) {
+              final st = _subStatusOf(m);
+              return st == 'active' || st == 'trialing';
+            }
+
+            // 3) クライアント側で検索・既存フィルタ
             var filtered = rows.where((r) {
               if (query.trim().isEmpty) return true;
               final q = query.trim().toLowerCase();
@@ -121,6 +157,27 @@ class TenantsListView extends StatelessWidget {
                   .toList();
             }
 
+            // ★ 4) 三値フィルタの適用
+            if (initialPaid != Tri.any) {
+              filtered = filtered.where((r) {
+                final paid = _initialStatusOf(r.data) == 'paid';
+                return initialPaid == Tri.yes ? paid : !paid;
+              }).toList();
+            }
+            if (subActive != Tri.any) {
+              filtered = filtered.where((r) {
+                final ok = _isSubActive(r.data);
+                return subActive == Tri.yes ? ok : !ok;
+              }).toList();
+            }
+            if (connectCreated != Tri.any) {
+              filtered = filtered.where((r) {
+                final ok = _chargesEnabledOf(r.data);
+                return connectCreated == Tri.yes ? ok : !ok;
+              }).toList();
+            }
+
+            // 5) ソート
             if (sortBy == SortBy.nameAsc) {
               filtered.sort(
                 (a, b) => _s(a.data['name']).compareTo(_s(b.data['name'])),
@@ -136,13 +193,14 @@ class TenantsListView extends StatelessWidget {
                 return db.compareTo(da);
               });
             } else if (sortBy == SortBy.revenueDesc) {
-              // 表示時ロードのためここでは未ソート（必要なら集計後に再整列）
+              // 売上は描画時にロード（必要なら後段で再整列）
             }
 
             if (filtered.isEmpty) {
               return const Center(child: Text('条件に一致する店舗がありません'));
             }
 
+            // 6) リスト表示
             return ListView.separated(
               itemCount: filtered.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
@@ -150,20 +208,18 @@ class TenantsListView extends StatelessWidget {
                 final r = filtered[i];
                 final m = r.data;
 
-                // フィールドが全部 null / 空でも安全に表示
-                final name = _nonEmptyOr(m['name'], '設定なし');
-                final status = _nonEmptyOr(m['status'], '設定なし');
-                final createdAt = _ts(m['createdAt'])?.toDate(); // null 可
-                final chargesEnabled = _chargesEnabledOf(m); // missing → false
+                final name = _nonEmptyOr(m['name'], '');
+                final status = _nonEmptyOr(m['status'], '');
+                final createdAt = _ts(m['createdAt'])?.toDate();
+                final chargesEnabled = _chargesEnabledOf(m);
 
-                // サブスク
                 final sub = (m['subscription'] is Map)
                     ? (m['subscription'] as Map)
                     : const <String, dynamic>{};
-                final subStatus = _nonEmptyOr(sub['status'], '設定なし');
-                final subPlan = _nonEmptyOr(sub['plan'], '設定なし');
+                final subStatus = _nonEmptyOr(sub['status'], '');
+                final subPlan = _nonEmptyOr(sub['plan'], '');
                 final nextRaw = sub['nextPaymentAt'] ?? sub['currentPeriodEnd'];
-                final nextAt = _ts(nextRaw)?.toDate(); // null 可
+                final nextAt = _ts(nextRaw)?.toDate();
                 final overdue =
                     (sub['overdue'] == true) ||
                     subStatus == 'past_due' ||
@@ -198,10 +254,10 @@ class TenantsListView extends StatelessWidget {
                     );
                   },
                   yen: yen,
-                  subPlan: subPlan, // 「設定なし」になる
-                  subStatus: subStatus, // 「設定なし」になる
+                  subPlan: subPlan,
+                  subStatus: subStatus,
                   subOverdue: overdue,
-                  subNextPaymentAt: nextAt, // null のまま可
+                  subNextPaymentAt: nextAt,
                 );
               },
             );

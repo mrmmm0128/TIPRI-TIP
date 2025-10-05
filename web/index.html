@@ -11,9 +11,22 @@
 
   <!-- iOS/PWA -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="TIPRI チップリ">
   <link rel="apple-touch-icon" href="icons/opg.png">
+
+   <!-- Safari/Chrome がUI色を推定するためのテーマ色（明るい色に） -->
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: no-preference)">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: dark)">
+
+<!-- ページはライト想定で描画（ダークに切り替えない） -->
+<meta name="color-scheme" content="light">
+<style>
+  :root { color-scheme: light; } /* Safariへの明示 */
+  html, body { background:#fff; } /* 背景が暗いと黒UIに寄りやすい */
+</style>
+
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
@@ -25,7 +38,7 @@
   <meta property="og:title" content="TIPRI チップリ">
   <meta property="og:description" content="スタッフに感謝を気軽に伝えられるチップアプリ。社員のモチベーション向上と顧客満足度アップを同時に実現。口コミやSNS連携でファンづくりにも役立つ。">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://venerable-mermaid-fcf8c8.netlify.app/">
+  <meta property="og:url" content="https://tipri.jp/">
   <meta property="og:image" content="https://venerable-mermaid-fcf8c8.netlify.app/ogp.png">
 
   <meta name="twitter:card" content="summary_large_image">

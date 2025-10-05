@@ -139,10 +139,10 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                       textInputAction: TextInputAction.next,
                     ),
                     const SizedBox(height: 8),
-                    TextField(
-                      controller: _company,
-                      decoration: const InputDecoration(labelText: '会社名'),
-                    ),
+                    // TextField(
+                    //   controller: _company,
+                    //   decoration: const InputDecoration(labelText: '会社名'),
+                    // ),
                   ],
                 ),
               ),

@@ -68,26 +68,12 @@ class _TenantTileState extends State<TenantTile> {
     });
   }
 
-  String _ymd(DateTime d) =>
-      '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
-
   @override
   Widget build(BuildContext context) {
-    final createdLabel = widget.createdAt != null
-        ? 'Created: ${_ymd(widget.createdAt!)}'
-        : null;
-
     final subtitleLines = <String>[
-      'ID: ${widget.tenantId}',
       if (widget.plan.isNotEmpty)
-        'Plan: ${widget.plan} / ${widget.status}${widget.chargesEnabled ? '・ コネクトアカウント作成済' : ''}',
-
-      if (createdLabel != null) createdLabel,
+        'Plan ${widget.plan} : ${widget.status}${widget.chargesEnabled ? '・コネクトアカウント作成済' : '・コネクトアカウント未作成'}',
     ];
-
-    final posterLabel = (widget.download ?? '') == 'done'
-        ? 'ポスターダウンロード済'
-        : 'ポスター未ダウンロード';
 
     return ListTile(
       onTap: widget.onTap,

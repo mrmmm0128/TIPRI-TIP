@@ -68,7 +68,7 @@ class AgentsList extends StatelessWidget {
                 [
                   if (email.isNotEmpty) email,
                   if (code.isNotEmpty) 'code: $code',
-                  '手数料: $percent%',
+
                   'status: $status',
                 ].join('  •  '),
               ),

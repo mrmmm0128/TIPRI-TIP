@@ -26,7 +26,6 @@ class AdminTenantDetailPage extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => Scaffold(
           appBar: AppBar(title: const Text('QRポスター作成')),
-          // StoreQrTab は ownerId を必須利用しているので渡す
           body: StoreQrTab(
             tenantId: tenantId,
             tenantName: tenantName,
@@ -38,6 +37,145 @@ class AdminTenantDetailPage extends StatelessWidget {
     );
   }
 
+  Future<void> _openEditContactSheet(
+    BuildContext context,
+    DocumentReference<Map<String, dynamic>> tenantRef, {
+    String? currentPhone,
+    String? currentMemo,
+  }) async {
+    final phoneCtrl = TextEditingController(text: currentPhone ?? '');
+    final memoCtrl = TextEditingController(text: currentMemo ?? '');
+    bool saving = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 150),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: SafeArea(
+            child: StatefulBuilder(
+              builder: (ctx, setLocal) {
+                Future<void> save() async {
+                  if (saving) return;
+                  setLocal(() => saving = true);
+                  try {
+                    final phone = phoneCtrl.text.trim();
+                    final memo = memoCtrl.text.trim();
+
+                    await tenantRef.set({
+                      'contact': {
+                        'phone': phone.isEmpty ? FieldValue.delete() : phone,
+                        'memo': memo.isEmpty ? FieldValue.delete() : memo,
+                      },
+                      'contactUpdatedAt': FieldValue.serverTimestamp(),
+                    }, SetOptions(merge: true));
+
+                    if (Navigator.canPop(ctx)) Navigator.pop(ctx);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('連絡先を保存しました')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('保存に失敗しました: $e')));
+                    }
+                  } finally {
+                    setLocal(() => saving = false);
+                  }
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        height: 4,
+                        width: 40,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.black12,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Text(
+                            '連絡先を編集',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      TextField(
+                        controller: phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: '電話番号（任意）',
+                          hintText: '例: 03-1234-5678 / 090-1234-5678',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: memoCtrl,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'メモ（任意）',
+                          hintText: '店舗メモ・注意事項など',
+                          prefixIcon: Icon(Icons.notes_outlined),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: saving ? null : save,
+                              icon: saving
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.save),
+                              label: const Text('保存'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tenantRef = FirebaseFirestore.instance
@@ -46,7 +184,6 @@ class AdminTenantDetailPage extends StatelessWidget {
 
     final pageTheme = Theme.of(context).copyWith(
       useMaterial3: true,
-      // ベース色
       colorScheme: const ColorScheme.light(
         primary: Colors.black,
         onPrimary: Colors.white,
@@ -58,8 +195,6 @@ class AdminTenantDetailPage extends StatelessWidget {
         onBackground: Colors.black,
       ),
       scaffoldBackgroundColor: Colors.white,
-
-      // AppBar がスクロール時に色被りしないように
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -67,21 +202,18 @@ class AdminTenantDetailPage extends StatelessWidget {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-
       dividerTheme: const DividerThemeData(
         color: Colors.black12,
         thickness: 1,
         space: 1,
       ),
-
-      // ボタン（Filled/Elevated/Text）を白黒固定
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
+          shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(8)),
-            side: const BorderSide(color: Colors.black),
+            side: BorderSide(color: Colors.black),
           ),
         ),
       ),
@@ -89,17 +221,15 @@ class AdminTenantDetailPage extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
+          shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(8)),
-            side: const BorderSide(color: Colors.black),
+            side: BorderSide(color: Colors.black),
           ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(foregroundColor: Colors.black),
       ),
-
-      // Chip（FilterChip/ChoiceChip）も白黒
       chipTheme: ChipThemeData(
         backgroundColor: Colors.white,
         selectedColor: Colors.black,
@@ -110,8 +240,6 @@ class AdminTenantDetailPage extends StatelessWidget {
         side: const BorderSide(color: Colors.black),
         shape: const StadiumBorder(),
       ),
-
-      // SegmentedButton を白黒
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           backgroundColor: MaterialStateProperty.resolveWith(
@@ -150,6 +278,11 @@ class AdminTenantDetailPage extends StatelessWidget {
                 final chargesEnabled =
                     m?['connect']?['charges_enabled'] == true;
 
+                // 作成者メールの候補（ドキュメント内）
+                final creatorEmailFromDoc =
+                    (m?['creatorEmail'] ?? m?['createdBy']?['email'])
+                        ?.toString();
+
                 return myCard(
                   title: '基本情報',
                   child: Column(
@@ -161,6 +294,25 @@ class AdminTenantDetailPage extends StatelessWidget {
                       _kv('Plan', plan.isEmpty ? '-' : plan),
                       _kv('Status', status),
                       _kv('Stripe', chargesEnabled ? 'charges_enabled' : '—'),
+
+                      // 作成者メール：tenant doc に無ければ users/{ownerUid} から取得して表示
+                      if (creatorEmailFromDoc != null &&
+                          creatorEmailFromDoc.isNotEmpty)
+                        _kv('Creator Email', creatorEmailFromDoc)
+                      else
+                        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(ownerUid)
+                              .snapshots(),
+                          builder: (context, userSnap) {
+                            final mail =
+                                userSnap.data?.data()?['email']?.toString() ??
+                                '-';
+                            return _kv('Creator Email', mail);
+                          },
+                        ),
+                      const SizedBox(height: 10),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: FilledButton.icon(
@@ -175,10 +327,55 @@ class AdminTenantDetailPage extends StatelessWidget {
               },
             ),
 
-            // 登録状況カード
+            // 連絡先カード（電話・メモ）
+            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: tenantRef.snapshots(),
+              builder: (context, snap) {
+                final m = snap.data?.data() ?? const <String, dynamic>{};
+                final contact =
+                    (m['contact'] as Map?)?.cast<String, dynamic>() ?? const {};
+                final phone = (contact['phone'] as String?) ?? '';
+                final memo = (contact['memo'] as String?) ?? '';
+
+                return myCard(
+                  title: '連絡先',
+                  action: TextButton.icon(
+                    onPressed: () => _openEditContactSheet(
+                      context,
+                      tenantRef,
+                      currentPhone: phone,
+                      currentMemo: memo,
+                    ),
+                    icon: const Icon(Icons.edit),
+                    label: const Text('編集'),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _kv('電話番号', phone.isEmpty ? '—' : phone),
+                      const SizedBox(height: 6),
+                      const Text('メモ', style: TextStyle(color: Colors.black54)),
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.03),
+                          border: Border.all(color: Colors.black12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(memo.isEmpty ? '—' : memo),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
+            // 登録状況カード（既存）
             StatusCard(tenantId: tenantId),
 
-            // 直近チップ
+            // 直近チップ（既存）
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: tenantRef
                   .collection('tips')

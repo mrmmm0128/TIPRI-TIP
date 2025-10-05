@@ -96,6 +96,7 @@ flutter:
     - assets/icons/no_subscription.png
     - assets/icons/50.png
     - assets/icons/free.png
+    - assets/policies/チップリ特定商取引法-1.png
     
 
   # An image asset can refer to one or more resolution-specific "variants", see

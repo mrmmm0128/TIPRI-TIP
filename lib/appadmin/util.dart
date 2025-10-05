@@ -319,15 +319,6 @@ class Filters extends StatelessWidget {
           Text(rangeLabel, style: const TextStyle(color: Colors.black54)),
 
           // ステータスフィルタ
-          FilterChip(
-            label: const Text(
-              '初期登録済',
-              style: TextStyle(height: 1.2, fontWeight: FontWeight.w700),
-            ),
-
-            selected: activeOnly,
-            onSelected: onToggleActive,
-          ),
 
           // 並び替え
           const SizedBox(width: 8),
@@ -337,12 +328,11 @@ class Filters extends StatelessWidget {
             items: const [
               DropdownMenuItem(
                 value: SortBy.revenueDesc,
-                child: Text('売上の高い順（表示内／簡易）'),
+                child: Text('売上の高い順'),
               ),
-              DropdownMenuItem(value: SortBy.nameAsc, child: Text('店舗名（昇順）')),
               DropdownMenuItem(
                 value: SortBy.createdDesc,
-                child: Text('作成日時（新しい順）'),
+                child: Text('作成日時が新しい順'),
               ),
             ],
           ),

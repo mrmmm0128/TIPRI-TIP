@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:yourpay/appadmin/admin_announsment.dart';
 import 'package:yourpay/appadmin/tenant/tenant_list_view.dart';
@@ -8,6 +9,9 @@ import 'package:yourpay/appadmin/util.dart';
 enum AdminViewMode { tenants, agencies }
 
 enum AgenciesTab { agents }
+
+// ★ 追加：三値フィルタ
+enum Tri { any, yes, no }
 
 /// 運営ダッシュボード（トップ → 店舗詳細）
 class AdminDashboardHome extends StatefulWidget {
@@ -28,6 +32,11 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
 
   SortBy _sortBy = SortBy.revenueDesc;
 
+  // ★ 追加：三値フィルタの状態
+  Tri _fInitial = Tri.any; // 初期費用 paid
+  Tri _fSub = Tri.any; // sub.status in {active, trialing}
+  Tri _fConnect = Tri.any; // connect.charges_enabled
+
   // tenantId -> (sum, count) キャッシュ
   final Map<String, Revenue> _revCache = {};
   DateTime? _rangeStart, _rangeEndEx;
@@ -38,7 +47,7 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
   @override
   void initState() {
     super.initState();
-    _applyPreset(); // 初期の期間をセット
+    _applyPreset();
     _searchCtrl.addListener(() {
       setState(() => _query = _searchCtrl.text.trim());
     });
@@ -50,108 +59,208 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
     super.dispose();
   }
 
-  // 代理店作成ダイアログ
+  Future<void> _setAgentPasswordFor(
+    String agentId,
+    String password,
+    String code,
+    String email,
+  ) async {
+    try {
+      final fn = FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('adminSetAgencyPassword');
+      await fn.call({
+        'agentId': agentId,
+        'password': password,
+        'login': code,
+        'email': email,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('パスワードを設定しました')));
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('設定に失敗: ${e.message ?? e.code}')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('設定に失敗: $e')));
+    }
+  }
+
   Future<void> _createAgencyDialog() async {
     final name = TextEditingController();
     final email = TextEditingController();
     final code = TextEditingController();
     final percent = TextEditingController(text: '10');
+    final pass1 = TextEditingController();
+    final pass2 = TextEditingController();
+    bool showPass1 = false;
+    bool showPass2 = false;
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Colors.black),
-        ),
-        titleTextStyle: const TextStyle(
-          color: Colors.black,
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-        ),
-        contentTextStyle: const TextStyle(color: Colors.black),
-
-        title: const Text('代理店を作成'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                decoration: const InputDecoration(
-                  labelText: '代理店名 *',
-                  border: OutlineInputBorder(),
-                ),
-                controller: name,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                decoration: const InputDecoration(
-                  labelText: 'メール',
-                  border: OutlineInputBorder(),
-                ),
-                controller: email,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                decoration: const InputDecoration(
-                  labelText: '紹介コード',
-                  border: OutlineInputBorder(),
-                ),
-                controller: code,
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                decoration: const InputDecoration(
-                  labelText: '手数料 %',
-                  border: OutlineInputBorder(),
-                ),
-                controller: percent,
-                keyboardType: TextInputType.number,
-              ),
-            ],
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSB) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Colors.black),
           ),
-        ),
-        actions: [
-          TextButton(
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.black, // 文字色
-              overlayColor: Colors.black12, // 押下時の波紋色も黒系に
+          titleTextStyle: const TextStyle(
+            color: Colors.black,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+          contentTextStyle: const TextStyle(color: Colors.black),
+          title: const Text('代理店を作成'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  decoration: const InputDecoration(
+                    labelText: '代理店名 *',
+                    border: OutlineInputBorder(),
+                  ),
+                  controller: name,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'メール',
+                    border: OutlineInputBorder(),
+                  ),
+                  controller: email,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: const InputDecoration(
+                    labelText: '紹介コード',
+                    border: OutlineInputBorder(),
+                  ),
+                  controller: code,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: pass1,
+                  obscureText: !showPass1,
+                  decoration: InputDecoration(
+                    labelText: '初期パスワード（任意・8文字以上）',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showPass1 ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () => setSB(() => showPass1 = !showPass1),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: pass2,
+                  obscureText: !showPass2,
+                  decoration: InputDecoration(
+                    labelText: '確認用パスワード',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showPass2 ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () => setSB(() => showPass2 = !showPass2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '※ パスワードを空のまま作成すると、パスワード設定はスキップされます。',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ),
+              ],
             ),
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.black, // 背景
-              foregroundColor: Colors.white, // 文字色
-              overlayColor: Colors.white12, // 押下時の波紋
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Colors.black),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.black,
+                overlayColor: Colors.black12,
               ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('キャンセル'),
             ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('作成'),
-          ),
-        ],
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                overlayColor: Colors.white12,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: Colors.black),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('作成'),
+            ),
+          ],
+        ),
       ),
     );
 
     if (ok == true) {
+      if (name.text.trim().isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('代理店名は必須です')));
+        return;
+      }
+
       final p = int.tryParse(percent.text.trim()) ?? 0;
       final now = FieldValue.serverTimestamp();
-      await FirebaseFirestore.instance.collection('agencies').add({
-        'name': name.text.trim(),
-        'email': email.text.trim(),
-        'code': code.text.trim(),
-        'commissionPercent': p,
-        'status': 'active',
-        'createdAt': now,
-        'updatedAt': now,
-      });
+
+      final docRef = await FirebaseFirestore.instance
+          .collection('agencies')
+          .add({
+            'name': name.text.trim(),
+            'email': email.text.trim(),
+            'code': code.text.trim(),
+            'commissionPercent': p,
+            'status': 'active',
+            'createdAt': now,
+            'updatedAt': now,
+          });
+
       if (!mounted) return;
+
+      final pw = pass1.text.trim();
+      final pw2 = pass2.text.trim();
+      if (pw.isNotEmpty || pw2.isNotEmpty) {
+        if (pw.length < 8) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('パスワードは8文字以上にしてください')));
+        } else if (pw != pw2) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('パスワードが一致しません')));
+        } else {
+          await _setAgentPasswordFor(
+            docRef.id,
+            pw,
+            code.text.trim(),
+            email.text.trim(),
+          );
+        }
+      }
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('作成しました')));
@@ -194,7 +303,6 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
             _customRange!.end.day,
           ).add(const Duration(days: 1));
         } else {
-          // デフォルトは今月
           start = DateTime(now.year, now.month, 1);
           endEx = DateTime(now.year, now.month + 1, 1);
         }
@@ -204,7 +312,7 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
     setState(() {
       _rangeStart = start;
       _rangeEndEx = endEx;
-      _revCache.clear(); // 期間が変わったらキャッシュは捨てる
+      _revCache.clear();
     });
   }
 
@@ -230,7 +338,6 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
     }
   }
 
-  // ====== 単テナントの売上合計を読み取り（キャッシュ付き） ======
   Future<Revenue> _loadRevenueForTenant({
     required String tenantId,
     required String ownerUid,
@@ -255,7 +362,7 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
           isGreaterThanOrEqualTo: Timestamp.fromDate(_rangeStart!),
         )
         .where('createdAt', isLessThan: Timestamp.fromDate(_rangeEndEx!))
-        .limit(5000) // 運用に応じて適宜分割
+        .limit(5000)
         .get();
 
     int sum = 0;
@@ -272,10 +379,68 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
     return data;
   }
 
-  // ====== 表示フォーマット ======
   String _yen(int v) => '¥${v.toString()}';
   String _ymd(DateTime d) =>
       '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+
+  Widget _triFilterChip({
+    required String label,
+    required Tri value,
+    required ValueChanged<Tri> onChanged,
+  }) {
+    Tri next(Tri v) =>
+        v == Tri.any ? Tri.yes : (v == Tri.yes ? Tri.no : Tri.any);
+
+    String text(Tri v) => switch (v) {
+      Tri.any => '$label:すべて',
+      Tri.yes => '$label:あり',
+      Tri.no => '$label:なし',
+    };
+
+    IconData icon(Tri v) => switch (v) {
+      Tri.any => Icons.filter_list,
+      Tri.yes => Icons.check,
+      Tri.no => Icons.close,
+    };
+
+    final isActive = value != Tri.any;
+    final t = Theme.of(context).textTheme.labelMedium ?? const TextStyle();
+
+    return Material(
+      color: isActive ? Colors.black : Colors.white,
+      shape: const StadiumBorder(
+        side: BorderSide(color: Colors.black, width: 1.2),
+      ),
+      child: InkWell(
+        onTap: () => onChanged(next(value)),
+        customBorder: const StadiumBorder(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon(value),
+                size: 16,
+                color: isActive ? Colors.white : Colors.black,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                text(value),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: t.copyWith(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: .2,
+                  color: isActive ? Colors.white : Colors.black,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -300,9 +465,7 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
           fillColor: Colors.white,
         ),
       ),
-
       useMaterial3: true,
-      // ベース色
       colorScheme: const ColorScheme.light(
         primary: Colors.black,
         onPrimary: Colors.white,
@@ -314,7 +477,6 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
         onBackground: Colors.black,
       ),
       scaffoldBackgroundColor: Colors.white,
-
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -322,20 +484,18 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-
       dividerTheme: const DividerThemeData(
         color: Colors.black12,
         thickness: 1,
         space: 1,
       ),
-
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
+          shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(8)),
-            side: const BorderSide(color: Colors.black),
+            side: BorderSide(color: Colors.black),
           ),
         ),
       ),
@@ -343,17 +503,15 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
+          shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(8)),
-            side: const BorderSide(color: Colors.black),
+            side: BorderSide(color: Colors.black),
           ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(foregroundColor: Colors.black),
       ),
-
-      // Chip（FilterChip/ChoiceChip）も白黒
       chipTheme: ChipThemeData(
         backgroundColor: Colors.white,
         selectedColor: Colors.black,
@@ -364,8 +522,6 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
         side: const BorderSide(color: Colors.black),
         shape: const StadiumBorder(),
       ),
-
-      // SegmentedButton を白黒
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           backgroundColor: MaterialStateProperty.resolveWith(
@@ -414,6 +570,7 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
         ),
         body: Column(
           children: [
+            // 既存の共通フィルタ（期間・キーワード等）
             Filters(
               searchCtrl: _searchCtrl,
               preset: _preset,
@@ -428,18 +585,15 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
               rangeStart: _rangeStart,
               rangeEndEx: _rangeEndEx,
               activeOnly: _filterActiveOnly,
-              onToggleActive: (v) {
-                setState(() => _filterActiveOnly = v);
-              },
+              onToggleActive: (v) => setState(() => _filterActiveOnly = v),
               chargesEnabledOnly: _filterChargesEnabledOnly,
-              onToggleCharges: (v) {
-                setState(() => _filterChargesEnabledOnly = v);
-              },
+              onToggleCharges: (v) =>
+                  setState(() => _filterChargesEnabledOnly = v),
               sortBy: _sortBy,
               onSortChanged: (s) => setState(() => _sortBy = s),
             ),
 
-            // ▼ 検索バーのちょい下：ビュー切り替え（店舗一覧 / 代理店）
+            // 画面切替（店舗一覧 / 代理店）
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: Row(
@@ -471,7 +625,45 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
                 ],
               ),
             ),
+
+            // ★ 追加：三値フィルタ（店舗一覧ビューのときだけ表示）
+            if (_viewMode == AdminViewMode.tenants)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _triFilterChip(
+                      label: '初期費用',
+                      value: _fInitial,
+                      onChanged: (v) => setState(() => _fInitial = v),
+                    ),
+                    _triFilterChip(
+                      label: 'サブスク登録',
+                      value: _fSub,
+                      onChanged: (v) => setState(() => _fSub = v),
+                    ),
+                    _triFilterChip(
+                      label: 'Connect',
+                      value: _fConnect,
+                      onChanged: (v) => setState(() => _fConnect = v),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        _fInitial = Tri.any;
+                        _fSub = Tri.any;
+                        _fConnect = Tri.any;
+                      }),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('リセット'),
+                    ),
+                  ],
+                ),
+              ),
+
             const Divider(height: 1),
+
             Expanded(
               child: _viewMode == AdminViewMode.tenants
                   ? TenantsListView(
@@ -484,6 +676,11 @@ class _AdminDashboardHomeState extends State<AdminDashboardHome> {
                       loadRevenueForTenant: _loadRevenueForTenant,
                       yen: _yen,
                       ymd: _ymd,
+
+                      // ★ 追加：三値フィルタを渡す
+                      initialPaid: _fInitial,
+                      subActive: _fSub,
+                      connectCreated: _fConnect,
                     )
                   : AgenciesView(
                       query: _query,

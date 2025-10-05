@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:yourpay/appadmin/agent/contracts_list_for_agent.dart';
+
+enum Tri { any, yes, no }
 
 class AgencyDetailPage extends StatefulWidget {
   final String agentId;
@@ -21,6 +25,9 @@ class AgencyDetailPage extends StatefulWidget {
 class _AgencyDetailPageState extends State<AgencyDetailPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   bool _onboardingBusy = false;
+  Tri _fInitial = Tri.any;
+  Tri _fSub = Tri.any;
+  Tri _fConnect = Tri.any;
 
   @override
   void dispose() {
@@ -68,7 +75,11 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
       );
 
       if (url != null && url.isNotEmpty) {
-        await launchUrl(Uri.parse(url));
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+          webOnlyWindowName: '_self',
+        );
       }
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
@@ -85,7 +96,11 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
     }
   }
 
-  Future<void> _setAgentPassword(BuildContext context) async {
+  Future<void> _setAgentPassword(
+    BuildContext context,
+    String code,
+    String email,
+  ) async {
     final pass1 = TextEditingController();
     final pass2 = TextEditingController();
     final ok = await showDialog<bool>(
@@ -142,7 +157,12 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
       final fn = FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable('adminSetAgencyPassword');
-      await fn.call({'agentId': widget.agentId, 'password': p1});
+      await fn.call({
+        'agentId': widget.agentId,
+        'password': p1,
+        "login": code,
+        "email": email,
+      });
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -158,6 +178,34 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
         context,
       ).showSnackBar(SnackBar(content: Text('設定に失敗: $e')));
     }
+  }
+
+  Widget _triFilterChip({
+    required String label,
+    required Tri value,
+    required ValueChanged<Tri> onChanged,
+  }) {
+    // any → yes → no → any のトグル
+    Tri next(Tri v) =>
+        v == Tri.any ? Tri.yes : (v == Tri.yes ? Tri.no : Tri.any);
+    String text(Tri v) => switch (v) {
+      Tri.any => '$label:すべて',
+      Tri.yes => '$label:あり',
+      Tri.no => '$label:なし',
+    };
+
+    final isActive = value != Tri.any;
+    return FilterChip(
+      selected: isActive,
+      label: Text(text(value)),
+      onSelected: (_) => onChanged(next(value)),
+      selectedColor: Colors.black,
+      checkmarkColor: Colors.white,
+      labelStyle: TextStyle(color: isActive ? Colors.white : Colors.black),
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: Colors.black),
+      shape: const StadiumBorder(),
+    );
   }
 
   Future<void> _editAgent(
@@ -211,11 +259,11 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
                 controller: codeC,
                 decoration: const InputDecoration(labelText: '紹介コード'),
               ),
-              TextField(
-                controller: pctC,
-                decoration: const InputDecoration(labelText: '手数料(%)'),
-                keyboardType: TextInputType.number,
-              ),
+              // TextField(
+              //   controller: pctC,
+              //   decoration: const InputDecoration(labelText: '手数料(%)'),
+              //   keyboardType: TextInputType.number,
+              // ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: status,
@@ -257,7 +305,8 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
           IconButton(
             tooltip: 'パスワード設定',
             icon: const Icon(Icons.key_outlined),
-            onPressed: () => _setAgentPassword(context),
+            onPressed: () =>
+                _setAgentPassword(context, codeC.text, emailC.text),
           ),
         ],
       ),
@@ -297,9 +346,12 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('代理店詳細'),
+        title: const Text('代理店詳細', style: TextStyle(color: Colors.black)),
         automaticallyImplyLeading: widget.agent ? false : true,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: Colors.white,
       ),
+      backgroundColor: Colors.white,
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: ref.snapshots(),
         builder: (context, snap) {
@@ -330,22 +382,23 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                subtitle: Text('Agent ID: ${widget.agentId}'),
+
                 trailing: IconButton(
                   tooltip: '編集',
                   icon: const Icon(Icons.edit),
                   onPressed: () => _editAgent(context, ref, m),
                 ),
               ),
-              const Divider(height: 1),
+              const Divider(height: 1, color: Colors.grey),
+              const SizedBox(height: 12),
               _kv('メール', email.isNotEmpty ? email : '—'),
               _kv('紹介コード', code.isNotEmpty ? code : '—'),
-              _kv('手数料', '$percent%'),
+
               _kv('ステータス', status),
-              if (createdAt != null) _kv('作成', _ymdhm(createdAt)),
-              if (updatedAt != null) _kv('更新', _ymdhm(updatedAt)),
+              // if (createdAt != null) _kv('作成', _ymdhm(createdAt)),
+              // if (updatedAt != null) _kv('更新', _ymdhm(updatedAt)),
               const SizedBox(height: 12),
-              const Divider(height: 1),
+              const Divider(height: 1, color: Colors.grey),
 
               // ===== Connect / 入金口座 =====
               const Padding(
@@ -379,6 +432,10 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
                           '入金: ${payouts ? "可" : "不可"} ／ 料金回収: ${charges ? "可" : "不可"} ／ 毎月$anchor日入金',
                         ),
                         trailing: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors
+                                .black, // Set the desired background color
+                          ),
                           onPressed: _onboardingBusy
                               ? null
                               : () => _upsertConnectAndOnboardForAgency(ctx),
@@ -389,6 +446,7 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
                                     SizedBox(
                                       width: 16,
                                       height: 16,
+
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
                                         color: Colors.white,
@@ -401,7 +459,7 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
                               : const Text('設定 / 続行'),
                         ),
                       ),
-                      const Divider(height: 1),
+                      const Divider(height: 1, color: Colors.grey),
                     ],
                   );
                 },
@@ -411,12 +469,11 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Text(
-                  '登録店舗一覧',
+                  '契約店舗一覧',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
 
-              // 検索ボックス（tenantName / tenantId / ownerUid などでフィルタ）
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: TextField(
@@ -427,7 +484,47 @@ class _AgencyDetailPageState extends State<AgencyDetailPage> {
                     isDense: true,
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (_) => (context as Element).markNeedsBuild(),
+                  onChanged: (_) =>
+                      setState(() {}), // ← markNeedsBuild より素直に setState
+                ),
+              ),
+
+              // フィルタ行
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _triFilterChip(
+                      label: '初期費用',
+                      value: _fInitial,
+                      onChanged: (v) => setState(() => _fInitial = v),
+                    ),
+                    _triFilterChip(
+                      label: 'サブスク登録',
+                      value: _fSub,
+                      onChanged: (v) => setState(() => _fSub = v),
+                    ),
+                    _triFilterChip(
+                      label: 'Connect',
+                      value: _fConnect,
+                      onChanged: (v) => setState(() => _fConnect = v),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        _searchCtrl.clear();
+                        _fInitial = Tri.any;
+                        _fSub = Tri.any;
+                        _fConnect = Tri.any;
+                      }),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text(
+                        'リセット',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
