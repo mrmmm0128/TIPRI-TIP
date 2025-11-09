@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'package:yourpay/endUser/utils/design.dart';
-import 'package:yourpay/tenant/method/fetchPlan.dart'; // fetchPlanStringById を使う
+import 'package:yourpay/endUser/utils/fetchPlan.dart'; // fetchPlanStringById を使う
 
 class StaffDetailPage extends StatefulWidget {
   const StaffDetailPage({super.key});
@@ -109,16 +109,54 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
   Future<void> _editSenderMessage() async {
     _messageCtrl.text = _senderMessage ?? '';
     final saved = await showDialog<bool>(
+      barrierDismissible: false,
       context: context,
       builder: (_) => AlertDialog(
+        // ★ 追加: 画面端との余白を固定（ダイアログが広がり過ぎない）
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         title: const Text('メッセージを添える'),
-        content: TextField(
-          controller: _messageCtrl,
-          maxLines: 4,
-          maxLength: _maxMessageLength,
-          decoration: const InputDecoration(
-            hintText: '（任意）スタッフへ一言メッセージ',
-            border: OutlineInputBorder(),
+        // ★ 重要: ダイアログ内容の最大幅/最小幅を固定
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 320, maxWidth: 420),
+          child: SizedBox(
+            width: 360, // ← 実際に使う固定幅（お好みで 340〜420 などに）
+            child: TextField(
+              controller: _messageCtrl,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              minLines: 4,
+              maxLines: 4, // ← 高さは4行で固定、超えた分は内部スクロール
+              expands: false,
+              style: AppTypography.body(color: AppPalette.black),
+              decoration: InputDecoration(
+                hintText: '（任意）スタッフへ一言メッセージ',
+                hintStyle: AppTypography.small(color: AppPalette.textSecondary),
+                filled: true,
+                fillColor: AppPalette.white,
+                contentPadding: const EdgeInsets.all(12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: AppPalette.black,
+                    width: AppDims.border,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: AppPalette.black,
+                    width: AppDims.border,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: AppPalette.black,
+                    width: AppDims.border2,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
         actions: [
@@ -142,15 +180,14 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     );
 
     if (saved == true) {
-      setState(
-        () => _senderMessage = _messageCtrl.text.trim().isEmpty
-            ? null
-            : _messageCtrl.text.trim(),
-      );
+      setState(() {
+        final t = _messageCtrl.text.trim();
+        _senderMessage = t.isEmpty ? null : t;
+      });
     }
   }
 
-  void _initFromUrlIfNeeded() {
+  void _initFromUrlIfNeeded() async {
     // すでに埋まっていれば二度目は何もしない
     if (tenantId != null && employeeId != null) return;
 
@@ -190,16 +227,14 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
       direct = true;
     }
 
-    name = name ?? pickAny(['name', 'n']);
-    email = email ?? pickAny(['email', 'mail']);
-    photoUrl = photoUrl ?? pickAny(['photoUrl', 'p']);
-    tenantName = tenantName ?? pickAny(['tenantName', 'store']);
+    // name = name ?? pickAny(['name', 'n']);
+    // email = email ?? pickAny(['email', 'mail']);
+    // photoUrl = photoUrl ?? pickAny(['photoUrl', 'p']);
+    // tenantName = tenantName ?? pickAny(['tenantName', 'store']);
 
     tenantId = tenantId ?? t;
     employeeId = employeeId ?? e;
-    if (u != null) {
-      uid = u;
-    }
+    await _resolveUidIfNeeded();
 
     if (a != null) {
       _amountCtrl.text = a;
@@ -208,6 +243,33 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     if (mounted) setState(() {});
     _maybeFetchFromFirestore();
     _updateAllowMessage();
+  }
+
+  Future<void> _resolveUidIfNeeded() async {
+    if (tenantId == null || tenantId!.isEmpty) return;
+
+    try {
+      final idx = await FirebaseFirestore.instance
+          .collection('tenantIndex')
+          .doc(tenantId!)
+          .get();
+
+      final data = idx.data() ?? {};
+      // フィールド名の揺れに広めに対応
+      final resolved =
+          (data['uid'] ??
+                  data['ownerUid'] ??
+                  data['userId'] ??
+                  data['owner'] ??
+                  data['createdBy'])
+              ?.toString();
+
+      if (resolved != null && resolved.isNotEmpty) {
+        setState(() => uid = resolved);
+      }
+    } catch (_) {
+      // 取れない場合は何もしない（上位でハンドリング）
+    }
   }
 
   Future<void> _maybeFetchFromFirestore() async {
@@ -318,64 +380,87 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
             ),
           ),
         ),
-        child: AlertDialog(
-          backgroundColor: AppPalette.white,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: AppPalette.black, width: AppDims.border),
-          ),
-          title: Text(
-            'メッセージを添えますか？',
-            style: AppTypography.label(color: AppPalette.black),
-          ),
-          content: TextField(
-            controller: _messageCtrl,
-            maxLines: 4,
-            maxLength: _maxMessageLength,
-            style: AppTypography.body(color: AppPalette.black),
-            decoration: InputDecoration(
-              hintText: '（任意）スタッフへ一言メッセージ',
-              hintStyle: AppTypography.small(color: AppPalette.textSecondary),
-              filled: true,
-              fillColor: AppPalette.white,
-              contentPadding: const EdgeInsets.all(12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: AppPalette.black,
-                  width: AppDims.border,
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: AppPalette.black,
-                  width: AppDims.border,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: AppPalette.black,
-                  width: AppDims.border2,
+        // ★ ダイアログ本体の幅を固定するために SizedBox でラップ
+        child: SizedBox(
+          width: 380, // お好みで 360〜420 の範囲で
+          child: AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 24,
+            ),
+            backgroundColor: AppPalette.white,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: AppPalette.black, width: AppDims.border),
+            ),
+            title: Text(
+              'メッセージを贈ろう！',
+              style: AppTypography.label(color: AppPalette.black),
+            ),
+            // ★ content 側も最大/最小幅を制限し、TextField を4行固定に
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 360, maxWidth: 360),
+              child: SizedBox(
+                width: double.infinity,
+                child: TextField(
+                  controller: _messageCtrl,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  minLines: 4,
+                  maxLines: 4, // 高さ4行固定（超過分は内部スクロール）
+                  maxLength: _maxMessageLength,
+                  expands: false,
+                  style: AppTypography.body(color: AppPalette.black),
+                  decoration: InputDecoration(
+                    hintText: '（任意）スタッフへ一言メッセージ',
+                    hintStyle: AppTypography.small(
+                      color: AppPalette.textSecondary,
+                    ),
+                    filled: true,
+                    fillColor: AppPalette.white,
+                    contentPadding: const EdgeInsets.all(12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppPalette.black,
+                        width: AppDims.border,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppPalette.black,
+                        width: AppDims.border,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: AppPalette.black,
+                        width: AppDims.border2,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          actions: [
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pop(context, _CommentAction.cancel),
-                  child: const Text(
-                    '戻る',
-                    style: TextStyle(fontFamily: "LINEseed", fontSize: 12),
+            // ★ Row+Expanded は幅を広げるので Wrap に変更（横幅固定を崩さない）
+            actions: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop(context, _CommentAction.cancel),
+                    child: const Text(
+                      '戻る',
+                      style: TextStyle(fontFamily: "LINEseed", fontSize: 12),
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: OutlinedButton(
+                  OutlinedButton(
                     onPressed: () =>
                         Navigator.pop(context, _CommentAction.skip),
                     child: const Text(
@@ -383,20 +468,17 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                       style: TextStyle(fontFamily: "LINEseed", fontSize: 12),
                     ),
                   ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: FilledButton(
+                  FilledButton(
                     onPressed: () => Navigator.pop(context, _CommentAction.ok),
                     child: const Text(
                       '送信',
                       style: TextStyle(fontFamily: "LINEseed", fontSize: 12),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -463,9 +545,6 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
 
       if (!mounted) return;
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('stripe.error', args: [e.toString()]))),
-      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }

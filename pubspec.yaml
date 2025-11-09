@@ -76,8 +76,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/posters/store_poster.png
-    - assets/posters/store_poster2.png
+
     - assets/posters/ZOTMAN.png
     - assets/posters/tipri.png
     - assets/fonts/NotoSansJP-VariableFont_wght.ttf
@@ -85,18 +84,20 @@ flutter:
     - assets/translations/
     - assets/endUser/
     - assets/posters/play.jpg
-    - assets/policies/terms_ja.md
-    - assets/policies/privacy_ja.md
-    - assets/pdf/tipri_page-0001.jpg
-    - assets/pdf/tipri_page-0002.jpg
-    - assets/pdf/tipri_page-0003.jpg
-    - assets/pdf/tipri_page-0004.jpg
-    - assets/pdf/tipri_page-0005.jpg
-    - assets/icons/staff_qr.png
-    - assets/icons/no_subscription.png
-    - assets/icons/50.png
-    - assets/icons/free.png
-    - assets/policies/チップリ特定商取引法-1.png
+    - assets/pdf/1.jpg
+    - assets/pdf/2.jpg
+    - assets/pdf/3.jpg
+    - assets/pdf/4.jpg
+    - assets/pdf/5.jpg
+    - assets/pdf/6.jpg
+    - assets/pdf/7.jpg
+    - assets/pdf/PC_1.jpg
+    - assets/pdf/PC_2.jpg
+    - assets/pdf/PC_3.jpg
+    - assets/pdf/PC_4.jpg
+    - assets/pdf/PC_5.jpg
+    - assets/pdf/PC_6.jpg
+
     
 
   # An image asset can refer to one or more resolution-specific "variants", see

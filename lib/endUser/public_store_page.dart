@@ -4,10 +4,10 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:yourpay/endUser/utils/BottomInstallCta.dart';
 import 'package:yourpay/endUser/utils/design.dart';
 import 'package:yourpay/endUser/utils/fetchUidByTenantId.dart';
 import 'package:yourpay/endUser/utils/image_scrol.dart';
-import 'package:yourpay/tenant/widget/tipri_policy.dart';
 
 /// 黒フチ × 黄色の“縁取りテキスト”
 class StrokeText extends StatelessWidget {
@@ -71,10 +71,8 @@ class LanguageSelector extends StatelessWidget {
         color: AppPalette.border,
       ),
       iconEnabledColor: AppPalette.black,
-
       items: supportedLocales.map((locale) {
         final label = _getLabel(locale.languageCode);
-
         return DropdownMenuItem(
           value: locale,
           child: Text(
@@ -133,19 +131,24 @@ class PublicStorePageState extends State<PublicStorePage> {
 
   final _searchCtrl = TextEditingController();
   String _query = '';
-  bool _showAllMembers = false;
+
+  // ▼ 変更：表示件数トグルは ValueNotifier で管理（外側を再構築しない）
+  final ValueNotifier<bool> _showAllMembersVN = ValueNotifier<bool>(false);
 
   final _scrollController = ScrollController();
-  bool _showIntro = true; // ← 追加：最初の3秒だけ true
+  bool _showIntro = true; // 最初はローディング画面
+
+  // ▼ 追加：進捗管理
+  int _progress = 0; // 0..100
+  bool _initStarted = false; // 二重実行防止
+  static const int _minSplashMs = 1200; // 最低表示時間（体感向上）
 
   @override
   void initState() {
     super.initState();
     _searchCtrl.addListener(() {
+      // 検索変更は最小限の再構築でOK（ここは setState で検索欄とリストを更新）
       setState(() => _query = _searchCtrl.text.trim().toLowerCase());
-    });
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showIntro = false);
     });
   }
 
@@ -153,35 +156,95 @@ class PublicStorePageState extends State<PublicStorePage> {
   void dispose() {
     _searchCtrl.dispose();
     _scrollController.dispose();
+    _showAllMembersVN.dispose();
     super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _loadFromRouteOrQuery();
-    precacheImage(const AssetImage('assets/posters/tipri.png'), context);
+    // 事前に一度だけ初期化
+    _initWithProgress();
   }
 
-  Future<void> _openScta() async {
+  void _setProgress(int v) {
     if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => SctaImageViewer()));
+    setState(() {
+      _progress = v.clamp(0, 100).toInt();
+    });
+  }
+
+  Future<void> _initWithProgress() async {
+    if (_initStarted) return;
+    _initStarted = true;
+
+    final startedAt = DateTime.now();
+
+    // Step1: ロゴ画像を事前読み込み
+    try {
+      await precacheImage(
+        const AssetImage('assets/posters/tipri.png'),
+        context,
+      );
+    } catch (_) {}
+    _setProgress(20);
+
+    // Step2: ルート/クエリ解決 + tenant 等の初期読み込み
+    await _loadFromRouteOrQuery();
+    _setProgress(70);
+
+    // Step3: ちょい待ち（UI安定）
+    await Future.delayed(const Duration(milliseconds: 200));
+    _setProgress(85);
+
+    // Step4: 画面反映余裕
+    await Future.delayed(const Duration(milliseconds: 100));
+    _setProgress(100);
+
+    // 最低表示時間を満たす
+    final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+    final remain = _minSplashMs - elapsed;
+    if (remain > 0) {
+      await Future.delayed(Duration(milliseconds: remain));
+    }
+
+    if (!mounted) return;
+    setState(() => _showIntro = false);
+  }
+
+  // === 追加：未設定通知（白黒の SnackBar） ===
+  void _showBWSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.black,
+        content: Text(message, style: const TextStyle(color: Colors.white)),
+        behavior: SnackBarBehavior.floating,
+        elevation: 2,
+      ),
+    );
+  }
+
+  // === 追加：URL を開く or 未設定通知 ===
+  Future<void> _openLinkOrNotify(String? url) async {
+    if (url == null || url.trim().isEmpty) {
+      _showBWSnack('まだ設定されていません');
+      return;
+    }
+    await launchUrlString(
+      url,
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_self',
+    );
   }
 
   // 追加：クエリ取得ヘルパー（? と # 両方対応）
   String? _getParam(String key) {
-    // 1) 先に ? クエリ
     final v1 = Uri.base.queryParameters[key];
     if (v1 != null && v1.isNotEmpty) return v1;
 
-    // 2) 次に # の中（/#/p?t=...&u=... みたいな形）
     final frag = Uri.base.fragment;
     if (frag.isNotEmpty) {
-      final s = frag.startsWith('/')
-          ? frag.substring(1)
-          : frag; // "/p?..." → "p?..."
+      final s = frag.startsWith('/') ? frag.substring(1) : frag;
       final f = Uri.tryParse(s);
       final v2 = f?.queryParameters[key];
       if (v2 != null && v2.isNotEmpty) return v2;
@@ -245,22 +308,56 @@ class PublicStorePageState extends State<PublicStorePage> {
     if (_showIntro) {
       return Scaffold(
         backgroundColor: AppPalette.yellow,
+
         body: Center(
-          child: LayoutBuilder(
-            builder: (context, c) {
-              final w = c.maxWidth;
-              // 幅の35%を基準にしつつ、最小/最大サイズを制限
-              final double size = (w * 0.35).clamp(140.0, 320.0);
-              return Image.asset(
-                'assets/posters/tipri.png',
-                width: size,
-                fit: BoxFit.contain,
-              );
-            },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LayoutBuilder(
+                    builder: (context, c) {
+                      final w = c.maxWidth;
+                      final double size = (w * 0.50).clamp(140.0, 320.0);
+                      return Image.asset(
+                        'assets/posters/tipri.png',
+                        width: size,
+                        fit: BoxFit.contain,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    '読み込み中 $_progress%',
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: _progress / 100.0,
+                      minHeight: 10,
+                      color: Colors.black,
+                      backgroundColor: Colors.black12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       );
     }
+
+    final size = MediaQuery.of(context).size;
+    final isNarrow = size.width < 480;
+
     // tenantId 不明 → 404 表示（現状どおり）
     if (tenantId == null) {
       return Scaffold(body: Center(child: Text(tr("status.not_found"))));
@@ -288,7 +385,6 @@ class PublicStorePageState extends State<PublicStorePage> {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: tenantDocStream,
       builder: (context, tSnap) {
-        // ★ 追加: ローディング/エラーの早期return（任意）
         if (tSnap.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
@@ -312,6 +408,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                 ),
               ],
             ),
+
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -339,7 +436,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                     ),
                     const SizedBox(height: 16),
                     OutlinedButton.icon(
-                      onPressed: () => setState(() {}), // 再読込（Streamなので即反映）
+                      onPressed: () {}, // Stream なので即反映、明示の再読込不要
                       icon: const Icon(Icons.refresh),
                       label: const Text('再読み込み'),
                     ),
@@ -358,7 +455,7 @@ class PublicStorePageState extends State<PublicStorePage> {
             subType == 'B' || ((tenantPlan ?? '').toUpperCase() == 'B');
 
         final lineUrl = (tData?['c_perks.lineUrl'] as String?) ?? '';
-        final googleReviewUrl = (tData?['c_perk.reviewUrl'] as String?) ?? '';
+        final googleReviewUrl = (tData?['c_perks.reviewUrl'] as String?) ?? '';
 
         return Scaffold(
           backgroundColor: AppPalette.pageBg,
@@ -375,7 +472,9 @@ class PublicStorePageState extends State<PublicStorePage> {
               ),
             ],
           ),
+          bottomNavigationBar: const BottomInstallCtaEdgeToEdge(),
           body: SingleChildScrollView(
+            key: const PageStorageKey('publicStoreScroll'),
             controller: _scrollController,
             padding: const EdgeInsets.only(
               top: 80,
@@ -390,7 +489,6 @@ class PublicStorePageState extends State<PublicStorePage> {
                   child: LayoutBuilder(
                     builder: (context, c) {
                       final w = c.maxWidth;
-                      // 幅の35%を基準にしつつ、最小/最大サイズを制限
                       final double size = (w * 0.5).clamp(140.0, 320.0);
                       return Image.asset(
                         'assets/posters/tipri.png',
@@ -400,12 +498,9 @@ class PublicStorePageState extends State<PublicStorePage> {
                     },
                   ),
                 ),
-
-                //SizedBox(height: 12),
-                SizedBox(height: 50),
+                const SizedBox(height: 50),
 
                 // ── メンバー ────────────────────────────────
-                //_Sectionbar(title: tr('section.members')),
                 _Sectionbar(title: tr('section.members')),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -452,11 +547,10 @@ class PublicStorePageState extends State<PublicStorePage> {
                 Center(child: Text(tr('staff.ranking'))),
                 const SizedBox(height: 10),
 
-                // （この位置は今の「スタッフ一覧」の StreamBuilder を丸ごと入れ替え）
+                // tips を購読して totals を作成 → employees を購読して並べる
                 StreamBuilder<QuerySnapshot>(
                   stream: tipsStream,
                   builder: (context, tipSnap) {
-                    // 合計額マップを作成：employeeId -> total amount
                     final Map<String, int> totals = {};
                     if (tipSnap.hasData) {
                       for (final d in tipSnap.data!.docs) {
@@ -470,13 +564,12 @@ class PublicStorePageState extends State<PublicStorePage> {
                             (data['currency'] as String?)?.toUpperCase() ??
                             'JPY';
                         if (employeeId == null || employeeId.isEmpty) continue;
-                        if (cur != 'JPY') continue; // 必要なら通貨フィルタ
+                        if (cur != 'JPY') continue;
                         final amount = (data['amount'] as num?)?.toInt() ?? 0;
                         totals[employeeId] = (totals[employeeId] ?? 0) + amount;
                       }
                     }
 
-                    // 2) スタッフ一覧を読み、totals に基づいて並び替える
                     return StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection(uid!)
@@ -500,7 +593,6 @@ class PublicStorePageState extends State<PublicStorePage> {
                           );
                         }
 
-                        // 検索フィルタ
                         final all = snap.data!.docs.toList();
                         final filtered = all.where((doc) {
                           final d = doc.data() as Map<String, dynamic>;
@@ -515,7 +607,6 @@ class PublicStorePageState extends State<PublicStorePage> {
                           );
                         }
 
-                        // ★ ここでランキング順にソート（合計が大きい順、同額なら作成新しい順）
                         filtered.sort((a, b) {
                           final ta = totals[a.id] ?? 0;
                           final tb = totals[b.id] ?? 0;
@@ -533,111 +624,141 @@ class PublicStorePageState extends State<PublicStorePage> {
                           return db.compareTo(da);
                         });
 
-                        // 表示件数（従来の “もっと見る/閉じる” を踏襲）
-                        final displayList = _showAllMembers
-                            ? filtered
-                            : filtered.take(6).toList();
-
-                        // 事前に「何位か」を引けるようランキングインデックスを作る
-                        final rankedIds = filtered
+                        // ① ランク母集団は「チップ>0 の人だけ」
+                        final rankedIdsByTip = filtered
                             .map((d) => d.id)
-                            .toList(); // 並び替え後の全ID
-                        int rankOf(String id) =>
-                            rankedIds.indexOf(id) + 1; // 1-origin
+                            .where((id) => (totals[id] ?? 0) > 0)
+                            .toList();
 
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppDims.pad,
-                            8,
-                            AppDims.pad,
-                            0,
-                          ),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final w = constraints.maxWidth;
-                              int cross = 2;
-                              if (w >= 1100) {
-                                cross = 5;
-                              } else if (w >= 900) {
-                                cross = 4;
-                              } else if (w >= 680) {
-                                cross = 3;
-                              }
+                        // ② ランク取得。0円なら null（=非表示）
+                        int? rankOf(String id) {
+                          if ((totals[id] ?? 0) <= 0) return null;
+                          final idx = rankedIdsByTip.indexOf(id);
+                          if (idx < 0) return null;
+                          return idx + 1;
+                        }
 
-                              return GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: cross,
-                                      mainAxisSpacing: 14,
-                                      crossAxisSpacing: 14,
-                                      mainAxisExtent: 200,
-                                    ),
-                                itemCount: displayList.length,
-                                itemBuilder: (_, i) {
-                                  final doc = displayList[i];
-                                  final data =
-                                      doc.data() as Map<String, dynamic>;
-                                  final id = doc.id;
-                                  final name = (data['name'] ?? '') as String;
-                                  final email = (data['email'] ?? '') as String;
-                                  final photoUrl =
-                                      (data['photoUrl'] ?? '') as String;
+                        return Column(
+                          children: [
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _showAllMembersVN,
+                              builder: (context, showAll, _) {
+                                final displayList = showAll
+                                    ? filtered
+                                    : filtered.take(6).toList();
 
-                                  // ★ 1〜4位だけ順位ラベル、それ以外は従来の「メンバー」相当
-                                  final r = rankOf(id);
-                                  final rankLabel = (r >= 1 && r <= 4)
-                                      ? tr(
-                                          'staff.number',
-                                          namedArgs: {'rank': '$r'},
-                                        )
-                                      : tr('section.members');
+                                return Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    AppDims.pad,
+                                    8,
+                                    AppDims.pad,
+                                    0,
+                                  ),
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final w = constraints.maxWidth;
+                                      int cross = 2;
+                                      if (w >= 1100) {
+                                        cross = 5;
+                                      } else if (w >= 900) {
+                                        cross = 4;
+                                      } else if (w >= 680) {
+                                        cross = 3;
+                                      }
 
-                                  return _RankedMemberCard(
-                                    rankLabel: rankLabel,
-                                    name: name,
-                                    photoUrl: photoUrl,
-                                    onTap: () {
-                                      Navigator.pushNamed(
-                                        context,
-                                        '/staff',
-                                        arguments: {
-                                          'tenantId': tenantId,
-                                          'tenantName': tenantName,
-                                          'employeeId': id,
-                                          'name': name,
-                                          'email': email,
-                                          'photoUrl': photoUrl,
-                                          'uid': uid,
+                                      return GridView.builder(
+                                        key: ValueKey(
+                                          'grid-${showAll ? "all" : "top6"}',
+                                        ),
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        gridDelegate:
+                                            SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: cross,
+                                              mainAxisSpacing: 14,
+                                              crossAxisSpacing: 14,
+                                              mainAxisExtent: 200,
+                                            ),
+                                        itemCount: displayList.length,
+                                        itemBuilder: (_, i) {
+                                          final doc = displayList[i];
+                                          final data =
+                                              doc.data()
+                                                  as Map<String, dynamic>;
+                                          final id = doc.id;
+                                          final name =
+                                              (data['name'] ?? '') as String;
+                                          final email =
+                                              (data['email'] ?? '') as String;
+                                          final photoUrl =
+                                              (data['photoUrl'] ?? '')
+                                                  as String;
+
+                                          // ③ rankLabel は 1〜4 位のみ。0円は null（＝非表示）
+                                          final r = rankOf(id);
+                                          final String? rankLabel =
+                                              (r != null && r >= 1 && r <= 4)
+                                              ? tr(
+                                                  'staff.number',
+                                                  namedArgs: {'rank': '$r'},
+                                                )
+                                              : null;
+
+                                          return _RankedMemberCard(
+                                            rankLabel:
+                                                rankLabel, // ← String? にして null OK
+                                            name: name,
+                                            photoUrl: photoUrl,
+                                            onTap: () {
+                                              Navigator.pushNamed(
+                                                context,
+                                                '/staff',
+                                                arguments: {
+                                                  'tenantId': tenantId,
+                                                  'tenantName': tenantName,
+                                                  'employeeId': id,
+                                                  'name': name,
+                                                  'email': email,
+                                                  'photoUrl': photoUrl,
+                                                  'uid': uid,
+                                                },
+                                              );
+                                            },
+                                          );
                                         },
                                       );
                                     },
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            // 「もっとみる」ボタン（これも部分更新）
+                            Center(
+                              child: ValueListenableBuilder<bool>(
+                                valueListenable: _showAllMembersVN,
+                                builder: (context, showAll, _) {
+                                  return TextButton(
+                                    onPressed: () =>
+                                        _showAllMembersVN.value = !showAll,
+                                    child: Text(
+                                      showAll
+                                          ? tr('button.close')
+                                          : tr('button.see_more'),
+                                      style: AppTypography.label2(
+                                        color: AppPalette.textSecondary,
+                                      ),
+                                    ),
                                   );
                                 },
-                              );
-                            },
-                          ),
+                              ),
+                            ),
+                          ],
                         );
                       },
                     );
                   },
-                ),
-
-                const SizedBox(height: 8),
-                Center(
-                  child: TextButton(
-                    onPressed: () =>
-                        setState(() => _showAllMembers = !_showAllMembers),
-                    child: Text(
-                      _showAllMembers
-                          ? tr('button.close')
-                          : tr('button.see_more'),
-                      style: AppTypography.label2(
-                        color: AppPalette.textSecondary,
-                      ),
-                    ),
-                  ),
                 ),
 
                 // ── お店にチップ ─────────────────────────────
@@ -667,12 +788,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                           height: 100,
                           child: _YellowActionButton(
                             label: tr('button.LINE'),
-                            onPressed: lineUrl.isEmpty
-                                ? null
-                                : () => launchUrlString(
-                                    lineUrl,
-                                    mode: LaunchMode.externalApplication,
-                                  ),
+                            onPressed: () => _openLinkOrNotify(lineUrl),
                           ),
                         ),
                         const SizedBox(height: 7),
@@ -694,12 +810,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                           height: 100,
                           child: _YellowActionButton(
                             label: tr('button.LINE'),
-                            onPressed: lineUrl.isEmpty
-                                ? null
-                                : () => launchUrlString(
-                                    lineUrl,
-                                    mode: LaunchMode.externalApplication,
-                                  ),
+                            onPressed: () => _openLinkOrNotify(lineUrl),
                           ),
                         ),
                         const SizedBox(height: 15),
@@ -707,12 +818,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                           height: 100,
                           child: _YellowActionButton(
                             label: tr('button.Google_review'),
-                            onPressed: googleReviewUrl.isEmpty
-                                ? null
-                                : () => launchUrlString(
-                                    googleReviewUrl,
-                                    mode: LaunchMode.externalApplication,
-                                  ),
+                            onPressed: () => _openLinkOrNotify(googleReviewUrl),
                           ),
                         ),
                       ],
@@ -722,37 +828,50 @@ class PublicStorePageState extends State<PublicStorePage> {
 
                 // ── チップリを導入しよう（PR） ─────────────────
                 _Sectionbar(title: tr('section.initiate2')),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppDims.pad),
-                  child: SizedBox(
-                    height: 640,
-                    child: ImagesScroller(
-                      assets: const [
-                        'assets/pdf/tipri_page-0001.jpg',
-                        'assets/pdf/tipri_page-0002.jpg',
-                        'assets/pdf/tipri_page-0003.jpg',
-                        'assets/pdf/tipri_page-0004.jpg',
-                        'assets/pdf/tipri_page-0005.jpg',
-                      ],
-
-                      borderRadius: 12,
+                if (isNarrow) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDims.pad,
+                    ),
+                    child: SizedBox(
+                      height: 640,
+                      child: ImagesScroller(
+                        assets: const [
+                          'assets/pdf/1.jpg',
+                          'assets/pdf/2.jpg',
+                          'assets/pdf/3.jpg',
+                          'assets/pdf/4.jpg',
+                          'assets/pdf/5.jpg',
+                          'assets/pdf/6.jpg',
+                          'assets/pdf/7.jpg',
+                        ],
+                        borderRadius: 12,
+                      ),
                     ),
                   ),
-                ),
+                ],
+                if (!isNarrow) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDims.pad,
+                    ),
+                    child: SizedBox(
+                      height: 640,
+                      child: ImagesScroller(
+                        assets: const [
+                          'assets/pdf/PC_1.jpg',
+                          'assets/pdf/PC_2.jpg',
+                          'assets/pdf/PC_3.jpg',
+                          'assets/pdf/PC_4.jpg',
+                          'assets/pdf/PC_5.jpg',
+                          'assets/pdf/PC_6.jpg',
+                        ],
+                        borderRadius: 12,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                  label: const Text('特定商取引法に基づく表記'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black87,
-                    side: const BorderSide(color: Colors.black26),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: _openScta, // ← あとで _sctaUrl を差し替えるだけで遷移
-                ),
               ],
             ),
           ),
@@ -795,7 +914,7 @@ class _YellowActionButton extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppPalette.white,
-              shape: BoxShape.circle, // ← 正円
+              shape: BoxShape.circle,
               border: Border.all(
                 color: AppPalette.black,
                 width: AppDims.border2,
@@ -803,7 +922,6 @@ class _YellowActionButton extends StatelessWidget {
             ),
             child: Icon(icon, color: AppPalette.black, size: 38),
           ),
-
           const SizedBox(width: 16),
         ],
         Text(label, style: AppTypography.label2(color: AppPalette.black)),
@@ -811,11 +929,10 @@ class _YellowActionButton extends StatelessWidget {
     );
 
     return Material(
-      color: bg, // ← 指定があればその色、なければ黄色
-
+      color: bg,
       borderRadius: BorderRadius.circular(AppDims.radius),
       child: InkWell(
-        onTap: loading ? null : onPressed, // ← loading中は無効化
+        onTap: loading ? null : onPressed,
         borderRadius: BorderRadius.circular(AppDims.radius),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -862,7 +979,7 @@ class _Sectionbar extends StatelessWidget {
       right: 12,
       bottom: 8,
     ),
-    this.alignment = Alignment.center, // 左寄せ=Alignment.centerLeft, 右寄せ=...Right
+    this.alignment = Alignment.center,
     required this.title,
   });
 
@@ -881,9 +998,8 @@ class _Sectionbar extends StatelessWidget {
       child: Column(
         children: [
           Center(child: Text(title, style: AppTypography.label2())),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           SizedBox(
-            // ノッチ分の高さを確保（線の下に三角が付く）
             height: notchHeight + thickness,
             width: double.infinity,
             child: CustomPaint(
@@ -892,11 +1008,11 @@ class _Sectionbar extends StatelessWidget {
                 thickness: thickness,
                 notchWidth: notchWidth,
                 notchHeight: notchHeight,
-                alignX: alignment.x, // -1.0(左) ～ 1.0(右)
+                alignX: alignment.x,
               ),
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -909,24 +1025,22 @@ class _SectionbarPainter extends CustomPainter {
     required this.thickness,
     required this.notchWidth,
     required this.notchHeight,
-    required this.alignX, // -1.0(left) .. 1.0(right)
+    required this.alignX,
   });
 
   final Color color;
   final double thickness;
-  final double notchWidth; // 水平幅（見た目の“くぼみ”の左右端）
+  final double notchWidth; // 水平幅
   final double notchHeight; // 下方向の深さ
   final double alignX;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final y = thickness / 2; // 線の中心Y
-    final r = thickness / 2; // 端の丸みと同じ半径
+    final y = thickness / 2;
+    final r = thickness / 2;
 
-    // -1..1 -> [0..width]
     double cx = ((alignX + 1) / 2) * size.width;
 
-    // ノッチが端の丸みにめり込まないようにクランプ
     final minCx = r + notchWidth / 2;
     final maxCx = size.width - r - notchWidth / 2;
     cx = cx.clamp(minCx, maxCx);
@@ -936,18 +1050,17 @@ class _SectionbarPainter extends CustomPainter {
 
     final path = Path()
       ..moveTo(left.dx, left.dy)
-      ..lineTo(cx - notchWidth / 2, y) // ノッチ左肩
-      ..lineTo(cx, y + notchHeight) // ノッチ底
-      ..lineTo(cx + notchWidth / 2, y) // ノッチ右肩
-      ..lineTo(right.dx, right.dy); // 右端
+      ..lineTo(cx - notchWidth / 2, y)
+      ..lineTo(cx, y + notchHeight)
+      ..lineTo(cx + notchWidth / 2, y)
+      ..lineTo(right.dx, right.dy);
 
     final paintStroke = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = thickness
-      ..strokeCap = StrokeCap
-          .round // 両端まる
-      ..strokeJoin = StrokeJoin.round; // ノッチ肩の結合を丸く
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
 
     canvas.drawPath(path, paintStroke);
   }
@@ -963,12 +1076,15 @@ class _SectionbarPainter extends CustomPainter {
 
 /// ランキング風メンバーカード（黄色地＋黒枠）
 class _RankedMemberCard extends StatelessWidget {
-  final String rankLabel; // "第1位" or "メンバー"
+  /// 1〜4位などの文言。null なら順位UIは一切出さない
+  final String? rankLabel;
   final String name;
   final String photoUrl;
   final VoidCallback? onTap;
+
   const _RankedMemberCard({
-    required this.rankLabel,
+    super.key,
+    this.rankLabel, // ← nullable に変更
     required this.name,
     required this.photoUrl,
     this.onTap,
@@ -977,6 +1093,8 @@ class _RankedMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasPhoto = photoUrl.isNotEmpty;
+    final showRank = (rankLabel != null && rankLabel!.isNotEmpty);
+
     return Material(
       color: AppPalette.yellow,
       borderRadius: BorderRadius.circular(AppDims.radius),
@@ -991,23 +1109,26 @@ class _RankedMemberCard extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // 上部ラベル + 細線
-              Text(
-                rankLabel,
-                style: AppTypography.body(color: AppPalette.black),
-              ),
+              showRank
+                  ? Text(
+                      rankLabel!, // ← 表示は順位がある時だけ
+                      style: AppTypography.body(color: AppPalette.black),
+                    )
+                  : Text(
+                      "", // ← 表示は順位がある時だけ
+                      style: AppTypography.body(color: AppPalette.black),
+                    ),
               const SizedBox(height: 4),
               Container(
                 height: AppDims.border2,
                 decoration: BoxDecoration(
                   color: AppPalette.black,
-                  borderRadius: BorderRadius.circular(8), // ← ここで角丸指定
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
-
               const SizedBox(height: 12),
 
-              // アバター
+              const SizedBox(height: 8), // レイアウトの目安（好みで調整）
               Container(
                 width: 84,
                 height: 84,
@@ -1035,8 +1156,6 @@ class _RankedMemberCard extends StatelessWidget {
                     : null,
               ),
               const SizedBox(height: 10),
-
-              // 名前
               Text(
                 name.isEmpty ? 'スタッフ' : name,
                 maxLines: 1,
@@ -1139,14 +1258,7 @@ class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    widget.tenantName == null
-                        ? tr('stripe.tip_for_store')
-                        : tr(
-                            'stripe.tip_for_store1',
-                            namedArgs: {
-                              'tenantName': widget.tenantName ?? tr('store0'),
-                            },
-                          ),
+                    tr('stripe.tip_for_store'),
                     style: AppTypography.label(),
                   ),
                 ),
@@ -1157,6 +1269,8 @@ class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
               ],
             ),
             const SizedBox(height: 12),
+
+            // 金額表示
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               decoration: BoxDecoration(
@@ -1187,53 +1301,73 @@ class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    onPressed: () => _setAmount(0),
+                    onPressed: _loading ? null : () => _setAmount(0),
                     icon: const Icon(Icons.clear, color: AppPalette.black),
                   ),
                 ],
               ),
             ),
+
             const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(
-                children: _presets.map((v) {
-                  final active = _amount == v;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 2),
-                    child: ChoiceChip(
-                      side: BorderSide(
-                        color: AppPalette.border,
-                        width: AppDims.border2,
-                      ),
-                      label: Text('¥${_fmt(v)}'),
-                      selected: active,
-                      showCheckmark: false,
-                      backgroundColor: active
-                          ? AppPalette.black
-                          : AppPalette.white,
-                      selectedColor: AppPalette.black,
-                      labelStyle: TextStyle(
-                        color: active
-                            ? AppPalette.white
-                            : AppPalette.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      onSelected: (_) => _setAmount(v),
-                    ),
-                  );
-                }).toList(),
+
+            // 💡 プリセット（_loading中は無効＆薄く）
+            Opacity(
+              opacity: _loading ? 0.5 : 1,
+              child: IgnorePointer(
+                ignoring: _loading,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: _presets.map((v) {
+                      final active = _amount == v;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: ChoiceChip(
+                          side: BorderSide(
+                            color: AppPalette.border,
+                            width: AppDims.border2,
+                          ),
+                          label: Text('¥${_fmt(v)}'),
+                          selected: active,
+                          showCheckmark: false,
+                          backgroundColor: active
+                              ? AppPalette.black
+                              : AppPalette.white,
+                          selectedColor: AppPalette.black,
+                          labelStyle: TextStyle(
+                            color: active
+                                ? AppPalette.white
+                                : AppPalette.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          onSelected: (_) => _setAmount(v),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
               ),
             ),
 
             const SizedBox(height: 12),
-            _Keypad(
-              onTapDigit: _appendDigit,
-              onTapDoubleZero: _appendDoubleZero,
-              onBackspace: _backspace,
+
+            // 💡 テンキー（_loading中は無効＆薄く）
+            Opacity(
+              opacity: _loading ? 0.5 : 1,
+              child: IgnorePointer(
+                ignoring: _loading,
+                child: _Keypad(
+                  onTapDigit: _appendDigit,
+                  onTapDoubleZero: _appendDoubleZero,
+                  onBackspace: _backspace,
+                ),
+              ),
             ),
+
             const SizedBox(height: 12),
+
+            // アクションボタン
             Row(
               children: [
                 Flexible(
@@ -1251,6 +1385,7 @@ class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
                     label: tr('button.send_tip'),
                     onPressed: _loading ? null : _goStripe,
                     color: AppPalette.white,
+                    loading: _loading, // ← スピナー表示
                   ),
                 ),
               ],

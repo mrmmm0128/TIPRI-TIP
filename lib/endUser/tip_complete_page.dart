@@ -3,16 +3,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
-
-// あなたの既存ウィジェット
 import 'package:yourpay/endUser/public_store_page.dart';
 import 'package:yourpay/endUser/utils/design.dart';
-
-// ▼ アプリ内動画再生
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:yourpay/endUser/utils/fetchUidByTenantId.dart';
-import 'package:yourpay/tenant/method/fetchPlan.dart';
+import 'package:yourpay/endUser/utils/fetchPlan.dart';
 
 class TipCompletePage extends StatefulWidget {
   /// Navigator で最低限 tenantId は渡す想定（URL直叩きでも拾えるようにハイブリッド対応済）
@@ -42,8 +38,8 @@ class _TipCompletePageState extends State<TipCompletePage> {
   int? _amount;
   String? _employeeName;
   String? _uid;
-  bool isC = true;
-  bool isB = true;
+  bool isC = false;
+  bool isB = false;
 
   Future<_LinksGateResult>? _linksGateFuture;
 
@@ -63,15 +59,20 @@ class _TipCompletePageState extends State<TipCompletePage> {
     // ★ ここで uid を tenantIndex から必ず解決
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _resolveUidFromTenantIndexIfPossible();
-      // uid が解決してからリンクなどを再読込
       _reloadLinksGate();
       await initialize(); // isC 判定も uid 必須なのでここで
     });
   }
 
   Future<void> initialize() async {
-    isC = await fetchIsCPlanById(_uid!, _tenantId!);
-    isB = await fetchIsBPlanById(_uid!, _tenantId!);
+    if (_uid == null || _tenantId == null) return;
+    final c = await fetchIsCPlanById(_uid!, _tenantId!);
+    final b = await fetchIsBPlanById(_uid!, _tenantId!);
+    if (!mounted) return;
+    setState(() {
+      isC = c;
+      isB = b;
+    });
   }
 
   @override
@@ -348,7 +349,11 @@ class _TipCompletePageState extends State<TipCompletePage> {
 
   Future<void> _openUrl(String url) async {
     if (url.isEmpty) return;
-    await launchUrlString(url, mode: LaunchMode.externalApplication);
+    await launchUrlString(
+      url,
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_self',
+    );
   }
 
   Future<void> _openThanksVideo(String url) async {
@@ -373,7 +378,7 @@ class _TipCompletePageState extends State<TipCompletePage> {
       );
     }
 
-    final storeLabel = _tenantName ?? tr('success_page.store');
+    //final storeLabel = _tenantName ?? tr('success_page.store');
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -427,109 +432,87 @@ class _TipCompletePageState extends State<TipCompletePage> {
 
                   const SizedBox(height: 20),
 
-                  isC
-                      ? FutureBuilder<_LinksGateResult>(
-                          future: _linksGateFuture,
-                          builder: (context, snap) {
-                            if (snap.connectionState ==
-                                ConnectionState.waiting) {
-                              return const SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                  FutureBuilder<_LinksGateResult>(
+                    future: _linksGateFuture,
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      }
+                      if (!snap.hasData) return const SizedBox.shrink();
+
+                      final r = snap.data!;
+                      final videoUrl = (r.thanksVideoUrl ?? '').trim();
+                      final hasVideo = videoUrl.isNotEmpty;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            tr('success_page.thanks_from_store'),
+                            style: AppTypography.body(),
+                          ),
+                          const SizedBox(height: 8),
+
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                if (hasVideo) {
+                                  _openThanksVideo(videoUrl);
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('動画がまだ用意されていません'),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppPalette.black,
+                                    width: AppDims.border,
+                                  ),
                                 ),
-                              );
-                            }
-                            if (!snap.hasData) return const SizedBox.shrink();
-
-                            final r = snap.data!;
-                            final videoUrl = (r.thanksVideoUrl ?? '').trim();
-                            final hasVideo = videoUrl.isNotEmpty;
-
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  tr('success_page.thanks_from_store'),
-                                  style: AppTypography.body(),
-                                ),
-                                const SizedBox(height: 8),
-
-                                Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: () {
-                                      if (hasVideo) {
-                                        _openThanksVideo(videoUrl);
-                                      } else {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('動画がまだ用意されていません'),
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: AppPalette.black,
-                                          width: AppDims.border,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: AspectRatio(
+                                    aspectRatio: 16 / 9,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Image.asset(
+                                          'assets/posters/play.jpg',
+                                          fit: BoxFit.cover,
                                         ),
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: AspectRatio(
-                                          aspectRatio: 16 / 9,
-                                          child: Stack(
-                                            fit: StackFit.expand,
-                                            children: [
-                                              Image.asset(
-                                                'assets/posters/play.jpg',
-                                                fit: BoxFit.cover,
-                                              ),
-                                              const Center(
-                                                child: Icon(
-                                                  Icons.play_circle_fill,
-                                                  size: 56,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ],
+                                        const Center(
+                                          child: Icon(
+                                            Icons.play_circle_fill,
+                                            size: 56,
+                                            color: Colors.white,
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                const Divider(),
-                              ],
-                            );
-                          },
-                        )
-                      : const SizedBox(height: 1),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(),
+                        ],
+                      );
+                    },
+                  ),
+
                   const SizedBox(height: 12),
-                  // ① お店にチップを送る
-                  _YellowActionButton(
-                    label: tr("stripe.tip_for_store"),
-                    onPressed: _openStoreTipBottomSheet,
-                  ),
-                  const SizedBox(height: 8),
-
-                  // ② 他のスタッフへ
-                  _YellowActionButton(
-                    label: tr('success_page.initiate1'),
-                    onPressed: _navigatePublicStorePage,
-                  ),
-
-                  const SizedBox(height: 24),
-                  const Divider(),
-
                   if (isB) ...[
                     FutureBuilder<_LinksGateResult>(
                       future: _linksGateFuture,
@@ -558,22 +541,12 @@ class _TipCompletePageState extends State<TipCompletePage> {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const SizedBox(height: 16),
-                            Text(
-                              tr("公式ラインはこちらから"),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
-
-                            if (hasReview && hasLine)
-                              const SizedBox(height: 12),
-
                             if (hasLine)
                               SizedBox(
                                 height: 80,
                                 child: _YellowActionButton(
-                                  label: tr("公式LINE"),
-                                  icon: Icons.chat_bubble_outline,
+                                  label: tr("success_page.initiate22"),
+
                                   onPressed: () => _openUrl(r.lineOfficialUrl!),
                                 ),
                               ),
@@ -583,7 +556,6 @@ class _TipCompletePageState extends State<TipCompletePage> {
                     ),
                   ],
 
-                  // ▼ Cプラン限定リンク（Googleレビュー/LINE）
                   if (isC) ...[
                     FutureBuilder<_LinksGateResult>(
                       future: _linksGateFuture,
@@ -612,32 +584,24 @@ class _TipCompletePageState extends State<TipCompletePage> {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const SizedBox(height: 16),
-                            Text(
-                              tr("レビューと公式ラインはこちらから"),
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 8),
-
                             if (hasReview)
                               SizedBox(
                                 height: 80,
                                 child: _YellowActionButton(
-                                  label: tr('Googleレビュー'),
-                                  icon: Icons.reviews_outlined,
+                                  label: tr('success_page.initiate21'),
+
                                   onPressed: () => _openUrl(r.googleReviewUrl!),
                                 ),
                               ),
 
-                            if (hasReview && hasLine)
-                              const SizedBox(height: 12),
+                            if (hasReview && hasLine) const SizedBox(height: 8),
 
                             if (hasLine)
                               SizedBox(
                                 height: 80,
                                 child: _YellowActionButton(
-                                  label: tr("公式LINE"),
-                                  icon: Icons.chat_bubble_outline,
+                                  label: tr("success_page.initiate22"),
+
                                   onPressed: () => _openUrl(r.lineOfficialUrl!),
                                 ),
                               ),
@@ -646,6 +610,22 @@ class _TipCompletePageState extends State<TipCompletePage> {
                       },
                     ),
                   ],
+
+                  const SizedBox(height: 12),
+                  const Divider(),
+
+                  const SizedBox(height: 12),
+                  _YellowActionButton(
+                    label: tr("stripe.tip_for_store"),
+                    onPressed: _openStoreTipBottomSheet,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ② 他のスタッフへ
+                  _YellowActionButton(
+                    label: tr('success_page.initiate1'),
+                    onPressed: _navigatePublicStorePage,
+                  ),
                 ],
               ),
             ),
@@ -678,7 +658,6 @@ class _LinksGateResult {
 class _StoreTipBottomSheet extends StatefulWidget {
   final String tenantId;
   final String? tenantName;
-
   const _StoreTipBottomSheet({required this.tenantId, this.tenantName});
 
   @override
@@ -692,19 +671,18 @@ class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
   static const int _maxStoreTip = 1000000;
   final _presets = const [1000, 3000, 5000, 10000];
 
-  void _setAmount(int value) =>
-      setState(() => _amount = value.clamp(0, _maxStoreTip));
+  void _setAmount(int v) => setState(() => _amount = v.clamp(0, _maxStoreTip));
   void _appendDigit(int d) =>
       setState(() => _amount = (_amount * 10 + d).clamp(0, _maxStoreTip));
-  void _appendDoubleZero() {
-    if (_amount > 0)
-      setState(() => _amount = (_amount * 100).clamp(0, _maxStoreTip));
-  }
-
+  void _appendDoubleZero() => setState(
+    () => _amount = _amount == 0 ? 0 : (_amount * 100).clamp(0, _maxStoreTip),
+  );
   void _backspace() => setState(() => _amount = _amount ~/ 10);
+  String _fmt(int n) => n.toString();
 
   Future<void> _goStripe() async {
     if (_amount <= 0 || _amount > _maxStoreTip) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(tr('stripe.attention'))));
@@ -722,18 +700,21 @@ class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
       });
       final data = Map<String, dynamic>.from(res.data as Map);
       final checkoutUrl = data['checkoutUrl'] as String?;
-      if (checkoutUrl != null && checkoutUrl.isNotEmpty) {
-        if (mounted) Navigator.of(context).pop();
-        await launchUrlString(
-          checkoutUrl,
-          mode: LaunchMode.externalApplication,
-        );
-      } else {
+      if (checkoutUrl == null || checkoutUrl.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(tr('stripe.miss_URL'))));
+        return;
       }
+      if (mounted) Navigator.pop(context);
+      await launchUrlString(
+        checkoutUrl,
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_self',
+      );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(tr("stripe.error", args: [e.toString()]))),
       );
@@ -744,147 +725,164 @@ class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // タイトル
-          Row(
-            children: [
-              const Icon(Icons.storefront, color: Colors.black87),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  widget.tenantName == null
-                      ? tr("stripe.tip_for_store")
-                      : tr(
-                          "stripe.tip_for_store1",
-                          namedArgs: {"tenantName": widget.tenantName!},
-                        ),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // 金額表示
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppPalette.border,
-                width: AppDims.border,
-              ),
-            ),
-            child: Row(
+    final maxH = MediaQuery.of(context).size.height * 0.88;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxH),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
               children: [
-                const Text(
-                  '¥',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(width: 6),
+                const Icon(Icons.storefront, color: Colors.black87),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '$_amount',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black87,
-                    ),
+                    tr('stripe.tip_for_store'),
+                    style: AppTypography.label(),
                   ),
                 ),
-                const SizedBox(width: 8),
                 IconButton(
-                  onPressed: () => _setAmount(0),
-                  icon: const Icon(Icons.clear),
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: AppPalette.black),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // プリセット
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _presets.map((preset) {
-              final isSelected = _amount == preset;
-              return ChoiceChip(
-                side: BorderSide(
-                  color: AppPalette.border,
+            // 金額表示
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppPalette.black,
                   width: AppDims.border,
                 ),
-                showCheckmark: false,
-                label: Text('¥$preset'),
-                selected: isSelected,
-                onSelected: (_) => _setAmount(preset),
-                selectedColor: AppPalette.black,
-                backgroundColor: AppPalette.white,
-                labelStyle: TextStyle(
-                  color: isSelected ? AppPalette.white : AppPalette.black,
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }).toList(),
-          ),
+              ),
+              child: Row(
+                children: [
+                  const Text(
+                    '¥',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _fmt(_amount),
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _loading ? null : () => _setAmount(0),
+                    icon: const Icon(Icons.clear, color: AppPalette.black),
+                  ),
+                ],
+              ),
+            ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-          // キーパッド
-          _Keypad(
-            onTapDigit: _appendDigit,
-            onTapDoubleZero: _appendDoubleZero,
-            onBackspace: _backspace,
-          ),
-
-          const SizedBox(height: 12),
-
-          // フッター
-          Row(
-            children: [
-              Flexible(
-                flex: 1,
-                child: _YellowActionButton2(
-                  label: tr('button.cancel'),
-                  onPressed: _loading ? null : () => Navigator.pop(context),
-                  color: AppPalette.white,
+            // 💡 プリセット（_loading中は無効＆薄く）
+            Opacity(
+              opacity: _loading ? 0.5 : 1,
+              child: IgnorePointer(
+                ignoring: _loading,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: _presets.map((v) {
+                      final active = _amount == v;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: ChoiceChip(
+                          side: BorderSide(
+                            color: AppPalette.border,
+                            width: AppDims.border2,
+                          ),
+                          label: Text('¥${_fmt(v)}'),
+                          selected: active,
+                          showCheckmark: false,
+                          backgroundColor: active
+                              ? AppPalette.black
+                              : AppPalette.white,
+                          selectedColor: AppPalette.black,
+                          labelStyle: TextStyle(
+                            color: active
+                                ? AppPalette.white
+                                : AppPalette.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          onSelected: (_) => _setAmount(v),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Flexible(
-                flex: 2,
-                child: _YellowActionButton(
-                  label: tr('button.send_tip'),
-                  onPressed: _loading ? null : _goStripe,
-                  color: AppPalette.white,
+            ),
+
+            const SizedBox(height: 12),
+
+            // 💡 テンキー（_loading中は無効＆薄く）
+            Opacity(
+              opacity: _loading ? 0.5 : 1,
+              child: IgnorePointer(
+                ignoring: _loading,
+                child: _Keypad(
+                  onTapDigit: _appendDigit,
+                  onTapDoubleZero: _appendDoubleZero,
+                  onBackspace: _backspace,
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // アクションボタン
+            Row(
+              children: [
+                Flexible(
+                  flex: 1,
+                  child: _YellowActionButton(
+                    label: tr('button.cancel'),
+                    onPressed: _loading ? null : () => Navigator.pop(context),
+                    color: AppPalette.white,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  flex: 2,
+                  child: _YellowActionButton(
+                    label: tr('button.send_tip'),
+                    onPressed: _loading ? null : _goStripe,
+                    color: AppPalette.white,
+                    loading: _loading, // ← スピナー表示
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+/// テンキー
 class _Keypad extends StatelessWidget {
   final void Function(int d) onTapDigit;
   final VoidCallback onTapDoubleZero;
   final VoidCallback onBackspace;
-
   const _Keypad({
     required this.onTapDigit,
     required this.onTapDoubleZero,
@@ -904,7 +902,7 @@ class _Keypad extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14),
       ),
       onPressed: onPressed,
-      child: Text(label, style: const TextStyle(fontSize: 18)),
+      child: Text(label, style: AppTypography.label()),
     );
   }
 
@@ -974,112 +972,84 @@ class _Keypad extends StatelessWidget {
   }
 }
 
-/// 黄色×黒の大ボタン（テキストは長ければ自動縮小）
+/// 黄色×黒の大ボタン（色は任意で上書き可）
 class _YellowActionButton extends StatelessWidget {
   final String label;
-  final IconData? icon;
+  //final IconData? icon;
   final VoidCallback? onPressed;
+  final bool loading;
+
+  /// 背景色。未指定(null)なら AppPalette.yellow を使用
   final Color? color;
 
   const _YellowActionButton({
     required this.label,
-    this.icon,
+    //this.icon,
     this.onPressed,
     this.color,
+    this.loading = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final bg = color ?? AppPalette.yellow;
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(AppDims.radius),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(AppDims.radius),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppDims.radius),
-            border: Border.all(color: AppPalette.border, width: AppDims.border),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: AppPalette.black),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: AppTypography.label(color: AppPalette.black),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final spinnerColor = bg.computeLuminance() < 0.5
+        ? Colors.white
+        : Colors.black;
+
+    final child = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // if (icon != null) ...[
+        //   Container(
+        //     padding: const EdgeInsets.all(12),
+        //     decoration: BoxDecoration(
+        //       color: AppPalette.white,
+        //       shape: BoxShape.circle,
+        //       border: Border.all(
+        //         color: AppPalette.black,
+        //         width: AppDims.border2,
+        //       ),
+        //     ),
+        //     child: Icon(icon, color: AppPalette.black, size: 38),
+        //   ),
+        //   const SizedBox(width: 16),
+        // ],
+        Text(label, style: AppTypography.label2(color: AppPalette.black)),
+      ],
     );
-  }
-}
 
-class _YellowActionButton2 extends StatelessWidget {
-  final String label;
-  final IconData? icon;
-  final VoidCallback? onPressed;
-  final Color? color;
-
-  const _YellowActionButton2({
-    required this.label,
-    this.icon,
-    this.onPressed,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = color ?? AppPalette.yellow;
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(AppDims.radius),
-      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onPressed,
+        onTap: loading ? null : onPressed,
         borderRadius: BorderRadius.circular(AppDims.radius),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppDims.radius),
             border: Border.all(color: AppPalette.border, width: AppDims.border),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, color: AppPalette.black),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: AppTypography.label2(color: AppPalette.black),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            transitionBuilder: (c, a) => FadeTransition(opacity: a, child: c),
+            child: loading
+                ? SizedBox(
+                    key: const ValueKey('spinner'),
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(spinnerColor),
+                    ),
+                  )
+                : DefaultTextStyle.merge(
+                    key: const ValueKey('content'),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    child: child,
                   ),
-                ),
-              ),
-            ],
           ),
         ),
       ),

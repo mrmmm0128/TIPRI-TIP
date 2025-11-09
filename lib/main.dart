@@ -5,22 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:yourpay/appadmin/admin_dashboard_screen.dart';
-import 'package:yourpay/appadmin/agent/agent_login.dart';
-import 'package:yourpay/tenant/bootGate.dart';
+
+// ===== あなたの既存ページ =====
 import 'package:yourpay/endUser/tip_complete_page.dart';
 import 'package:yourpay/endUser/public_store_page.dart';
 import 'package:yourpay/endUser/staff_detail_page.dart';
-import 'package:yourpay/tenant/staff_qr/public_staff_qr_list_page.dart';
-import 'package:yourpay/tenant/staff_qr/qr_poster_build_page.dart';
-import 'package:yourpay/tenant/store_admin_add/accept_invite_screen.dart';
-import 'package:yourpay/tenant/widget/store_setting/account_detail_page.dart';
-import 'package:yourpay/tenant/widget/store_setting/tenant_detail_screen.dart';
-import 'tenant/login_screens.dart';
-import 'tenant/store_detail/store_detail_screen.dart';
 import 'endUser/payer_landing_screen.dart';
 
-FirebaseOptions web = FirebaseOptions(
+// ===== Firebase Web 設定 =====
+FirebaseOptions web = const FirebaseOptions(
   apiKey: 'AIzaSyAIfxdoGM5TWDVRjtfazvWZ9LnLlMnOuZ4',
   appId: '1:1005883564338:web:ad2b27b5bbd8c0993d772b',
   messagingSenderId: '1005883564338',
@@ -34,7 +27,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(options: web);
-  // await _connectToEmulatorsIfDebug();
 
   // 画面が真っ白になっても原因が見えるように
   ErrorWidget.builder = (FlutterErrorDetails details) {
@@ -102,9 +94,9 @@ class MyApp extends StatelessWidget {
     // /p?t=... [&thanks=true|&canceled=true]
     if (uri.path == '/p') {
       final tid = uri.queryParameters['t'] ?? '';
-
       final thanks = uri.queryParameters['thanks'] == 'true';
       final canceled = uri.queryParameters['canceled'] == 'true';
+
       if (thanks || canceled) {
         return MaterialPageRoute(
           builder: (_) => TipCompletePage(
@@ -117,6 +109,7 @@ class MyApp extends StatelessWidget {
         );
       }
 
+      // t のみ or パラメータ無しの場合は公開ページへ
       return MaterialPageRoute(
         builder: (_) => const PublicStorePage(),
         settings: RouteSettings(
@@ -129,23 +122,18 @@ class MyApp extends StatelessWidget {
     // それ以外の静的ルート
     final staticRoutes = <String, WidgetBuilder>{
       '/': (_) => const Root(),
-      '/login': (_) => const BootGate(),
-      '/store': (_) => const StoreDetailScreen(),
       '/staff': (_) => const StaffDetailPage(),
-      '/admin': (_) => const AdminDashboardHome(),
-      '/tenant': (_) => const tenantDetailScreen(),
-      '/account': (_) => const AccountDetailScreen(),
-      '/admin-invite': (_) => const AcceptInviteScreen(),
-      '/qr-all': (_) => const PublicStaffQrListPage(),
-      '/qr-all/qr-builder': (_) => const QrPosterBuilderPage(),
-      '/chechout-end': (_) => const LoginScreen(),
-      '/p': (_) => const PublicStorePage(),
-      '/agent-login': (_) => const AgentLoginPage(),
+      // '/p' はクエリ駆動のため staticRoutes には入れない
     };
 
     final builder = staticRoutes[uri.path];
+    if (builder != null) {
+      return MaterialPageRoute(builder: builder, settings: settings);
+    }
+
+    // どれにも該当しない場合は404
     return MaterialPageRoute(
-      builder: builder ?? (_) => const LoginScreen(),
+      builder: (_) => NotFoundPage(requestedPath: name),
       settings: settings,
     );
   }
@@ -200,30 +188,89 @@ class Root extends StatelessWidget {
         }
 
         final path = currentPath();
-        const publicPaths = {'/qr-all', '/qr-all/qr-builder', '/staff', '/p'};
 
-        // ❶ パブリックパスはログインに関係なくパブリック画面をそのまま表示
+        // ログイン不要で直接表示したい公開パス
+        const publicPaths = {
+          '/qr-all',
+          '/qr-all/qr-builder',
+          '/staff',
+          '/p',
+          '/payer',
+        };
+
+        // ❶ パブリックパスはログインに関係なくそのまま画面を返す
         if (publicPaths.contains(path)) {
           switch (path) {
-            case '/qr-all':
-              return const PublicStaffQrListPage();
-            case '/qr-all/qr-builder':
-              return const QrPosterBuilderPage();
             case '/staff':
               return const StaffDetailPage();
             case '/p':
+              // /#/p?t=... のようにクエリで分岐するのは onGenerateRoute 側に実装済み
               return const PublicStorePage();
+            case '/payer':
+              // 実際は onGenerateRoute 側で sid クエリを読む
+              return const _PlaceholderScaffold(title: 'Payer Landing');
+            case '/qr-all':
+            case '/qr-all/qr-builder':
+              return const _PlaceholderScaffold(title: 'QR Builder');
           }
         }
 
-        // ❷ それ以外：未ログインならゲート
-        if (snap.data == null) {
-          return const BootGate();
+        // ❷ それ以外はログイン状態で分岐（必要に応じて変更してください）
+        final user = snap.data;
+        if (user == null) {
+          // 未ログイン時のトップ（公開トップ等に差し替え可）
+          return const PublicStorePage();
         }
 
-        // ❸ ログイン済みの既定画面（必要なら StoreOrAdminSwitcher など）
-        return const StoreDetailScreen();
+        // ログイン済みのホーム画面（必要ならあなたの Home へ置き換え）
+        return const _PlaceholderScaffold(title: 'Home (signed in)');
       },
+    );
+  }
+}
+
+class NotFoundPage extends StatelessWidget {
+  final String requestedPath;
+  const NotFoundPage({super.key, required this.requestedPath});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('404')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off, size: 56),
+            const SizedBox(height: 12),
+            const Text('Page not found'),
+            const SizedBox(height: 8),
+            Text(
+              requestedPath,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pushReplacementNamed('/'),
+              child: const Text('Go Home'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 簡易プレースホルダー（本番では該当画面に置き換えてください）
+class _PlaceholderScaffold extends StatelessWidget {
+  final String title;
+  const _PlaceholderScaffold({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(child: Text(title)),
     );
   }
 }

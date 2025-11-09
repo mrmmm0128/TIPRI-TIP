@@ -54,7 +54,11 @@ class _StoreTipPageState extends State<StoreTipPage> {
       sessionId ??= _guessSessionIdFromUrl(checkoutUrl);
 
       // Stripe Checkout を外部で開く（別タブ/別ウィンドウ）
-      await launchUrlString(checkoutUrl, mode: LaunchMode.externalApplication);
+      await launchUrlString(
+        checkoutUrl,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_self',
+      );
 
       if (!mounted) return;
 

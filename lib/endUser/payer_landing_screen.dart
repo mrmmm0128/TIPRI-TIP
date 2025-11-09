@@ -40,6 +40,7 @@ class _PayerLandingScreenState extends State<PayerLandingScreen> {
     final ok = await launchUrl(
       Uri.parse(url),
       mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_self',
     );
     if (!ok) setState(() => message = '決済ページを開けませんでした');
   }
