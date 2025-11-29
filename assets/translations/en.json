@@ -1,43 +1,82 @@
 {
-    "app_title": "Tip App",
-    "store0": "Store",
-    "staff": {
-      "number": "Rank {rank}",
-      "ranking" : "Ranking of confirmed tip receipt amount"
+  "introduction": "Click here to install",
+  "staff_detail_title": "Staff Details",
+  "dialog": {
+    "edit_message_title": "Add a message",
+    "send_message_title": "Send a message!",
+    "message_hint": "(Optional) A short message to the staff"
+  },
+  "app_title": "Tip App",
+  "store0": "Store",
+  "staff": {
+    "number": "Rank {rank}",
+    "ranking": "Ranking of confirmed tip receipt amount"
+  },
+  "section": {
+    "members": "Send a tip to staff",
+    "store": "Send a tip to the store",
+    "initiate1": "We appreciate your support",
+    "initiate2": "Let's start using Tipri"
+  },
+  "button": {
+    "send_tip": "Send a tip",
+    "send_tip_for_store": "Send a tip to the store",
+    "LINE": "Official LINE",
+    "Google_review": "Google review",
+    "search_staff": "Search by name",
+    "see_more": "See more",
+    "close": "Close",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "save": "Save",
+    "back": "Back",
+    "skip": "Skip",
+    "send": "Send"
+  },
+  "status": {
+    "processing": "Processing...",
+    "no_staff": "No matching staff found",
+    "not_found": "Store not found (please check the URL)",
+    "staff_unknown": "Staff information is missing",
+    "load_failed": "Failed to load",
+    "store_not_ready_title": "Store registration is not complete",
+    "store_not_ready_desc": "This store is not currently accepting tips. Please try again later.",
+    "store_info_missing": "Failed to retrieve store information (t/tenantId is required)"
+  },
+  "validation": {
+    "tip": {
+      "min": "You can send tips from 100 JPY",
+      "max": "The amount is too large (max 1,000,000 JPY)"
     },
-    "section": {
-      "members": "staff",
-      "store": "Give a tip to the staff",
-      "initiate1": "We appreciate your support",
-      "initiate2": "Let's start using Tipri"
-    },
-    "button": {
-      "send_tip": "Send a tip",
-      "send_tip_for_store": "Send a tip to the store",
-      "LINE": "Official LINE",
-      "Google_review": "Google review",
-      "search_staff": "Search by name",
-      "see_more": "See more",
-      "close": "Close",
-      "cancel": "Cancel"
-    },
-    "status": {
-      "processing": "Processing...",
-      "no_staff": "No matching staff found",
-      "not_found": "Store not found (please check the URL)"
-    },
-    "validation": {
-      "tip": {
-        "min": "You can send tips from 100 JPY",
-        "max": "The amount is too large (max 1,000,000 JPY)"
-      }
-    },
-    "stripe": {
-      "attention": "Please enter between 1 and 1,000,000 JPY",
-      "miss_URL": "Failed to obtain the checkout URL",
-      "error": "Error: {}",
-      "tip_for_store": "Send a tip to the store",
-      "tip_for_store1": "Send a tip to {tenantName}"
-    }
-  }
-  
+    "value": "Tip amount",
+    "clear": "Clear"
+  },
+  "stripe": {
+    "attention": "Please enter between 1 and 1,000,000 JPY",
+    "miss_URL": "Failed to obtain the checkout URL",
+    "error": "Error: {}",
+    "tip_for_store": "Send a tip to the store",
+    "tip_for_store1": "Send a tip to {tenantName}"
+  },
+  "success_page": {
+    "title": "Payment Successful",
+    "store": "Store",
+    "initiate1": "Send a tip to other staff",
+    "success": "Tip has been sent",
+    "for": "Recipient: {Name}",
+    "amount": "Amount: {Amount}",
+    "initiate2": "We appreciate your cooperation",
+    "initiate21": "Post a Google review",
+    "initiate22": "Join the official LINE",
+    "thanks_from_store": "Message from the store",
+    "no_video": "No video is available yet"
+  },
+  "video": {
+    "play_failed": "Unable to play the video\n{error}"
+  },
+  "hint": {
+  "swipe_toggle": "Swipe horizontally to switch view",
+  "swipe_scroll": "Swipe to scroll"
+}
+
+}

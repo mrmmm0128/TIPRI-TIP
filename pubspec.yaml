@@ -34,26 +34,26 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  firebase_core: ^3.15.2
+  #firebase_core: ^3.15.2
   cloud_firestore: ^5.4.4
   firebase_auth: ^5.3.1
   cloud_functions: ^5.1.4
-  qr_flutter: ^4.1.0
+  #qr_flutter: ^4.1.0
   url_launcher: ^6.3.2
-  intl: ^0.20.2
+  #intl: ^0.20.2
   firebase_storage: ^12.4.10
   file_picker: ^10.3.1
   flutter_web_plugins:
     sdk: flutter
   pdf: ^3.10.8
   printing: ^5.13.4
-  barcode: ^2.2.6
+  #barcode: ^2.2.6
   google_fonts: ^6.3.1
   easy_localization: ^3.0.3
   video_player: ^2.8.6
   chewie: ^1.13.0
   syncfusion_flutter_pdfviewer: ^30.2.7
-  flutter_markdown: ^0.7.3
+  #flutter_markdown: ^0.7.3
 
   
 
@@ -84,19 +84,19 @@ flutter:
     - assets/translations/
     - assets/endUser/
     - assets/posters/play.jpg
-    - assets/pdf/1.jpg
-    - assets/pdf/2.jpg
-    - assets/pdf/3.jpg
-    - assets/pdf/4.jpg
-    - assets/pdf/5.jpg
-    - assets/pdf/6.jpg
-    - assets/pdf/7.jpg
-    - assets/pdf/PC_1.jpg
-    - assets/pdf/PC_2.jpg
-    - assets/pdf/PC_3.jpg
-    - assets/pdf/PC_4.jpg
-    - assets/pdf/PC_5.jpg
-    - assets/pdf/PC_6.jpg
+    # - assets/pdf/1.jpg
+    # - assets/pdf/2.jpg
+    # - assets/pdf/3.jpg
+    # - assets/pdf/4.jpg
+    # - assets/pdf/5.jpg
+    # - assets/pdf/6.jpg
+    # - assets/pdf/7.jpg
+    # - assets/pdf/PC_1.jpg
+    # - assets/pdf/PC_2.jpg
+    # - assets/pdf/PC_3.jpg
+    # - assets/pdf/PC_4.jpg
+    # - assets/pdf/PC_5.jpg
+    # - assets/pdf/PC_6.jpg
 
     
 

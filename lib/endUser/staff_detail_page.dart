@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import 'package:yourpay/endUser/utils/Intro_scaffold.dart';
 
 import 'package:yourpay/endUser/utils/design.dart';
 import 'package:yourpay/endUser/utils/fetchPlan.dart'; // fetchPlanStringById を使う
@@ -25,17 +26,25 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
   String? tenantName;
   String? uid;
   bool direct = true;
+  String _fmt(int n) => n.toString();
   bool _allowMessage = false; // ← B/Cのみ true
-
   final _amountCtrl = TextEditingController(text: '0');
   bool _loading = false;
-
-  // 送金者コメント
   final _messageCtrl = TextEditingController();
   String? _senderMessage;
   static const int _maxMessageLength = 200;
-
   static const int _maxAmount = 1000000;
+  bool _showIntro = true;
+  bool _initStarted = false;
+  static const int _minSplashMs = 3000; // 2秒
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initWithSplash();
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -49,17 +58,10 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
       photoUrl = args['photoUrl'] as String?;
       tenantName = args['tenantName'] as String?;
       uid = args["uid"] as String?;
-
       direct = false;
-      _updateAllowMessage();
-      setState(() {});
+      //_updateAllowMessage();
+      //setState(() {});
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _initFromUrlIfNeeded(); // URL直叩き対応
   }
 
   @override
@@ -74,6 +76,34 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     return v.clamp(0, _maxAmount);
   }
 
+  Future<void> _initWithSplash() async {
+    if (_initStarted) return;
+    _initStarted = true;
+
+    final startedAt = DateTime.now();
+
+    // 元々やっていた URL 初期化（tenantId / employeeId / uid 解決など）
+    await _initFromUrlIfNeeded();
+
+    // ついでに Firestore から氏名・店舗名など取得（足りてない場合）
+    await _maybeFetchFromFirestore();
+
+    // プランに応じてメッセージ可否を判定
+    await _updateAllowMessage();
+
+    // --- ここまでの処理にかかった時間を見て 2秒に満たなければ待つ ---
+    final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+    final remain = _minSplashMs - elapsed;
+    if (remain > 0) {
+      await Future.delayed(Duration(milliseconds: remain));
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _showIntro = false; // 本体 UI に切り替え
+    });
+  }
+
   Future<void> _updateAllowMessage() async {
     if (tenantId == null || tenantId!.isEmpty) return;
 
@@ -86,16 +116,16 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
             .doc(tenantId!)
             .get();
         u = (idx.data()?['uid'] as String?) ?? u;
-        if (u != null && u!.isNotEmpty) {
+        if (u != null && u.isNotEmpty) {
           uid = u;
         }
       } catch (_) {}
     }
-    if (u == null || u!.isEmpty) return;
+    if (u == null || u.isEmpty) return;
 
     try {
       final plan = await fetchPlanStringById(
-        u!,
+        u,
         tenantId!,
       ); // 'A' / 'B' / 'C' など
       final allow = plan.toUpperCase() == 'B' || plan.toUpperCase() == 'C';
@@ -105,89 +135,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     }
   }
 
-  // メッセージ入力ダイアログ
-  Future<void> _editSenderMessage() async {
-    _messageCtrl.text = _senderMessage ?? '';
-    final saved = await showDialog<bool>(
-      barrierDismissible: false,
-      context: context,
-      builder: (_) => AlertDialog(
-        // ★ 追加: 画面端との余白を固定（ダイアログが広がり過ぎない）
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        title: const Text('メッセージを添える'),
-        // ★ 重要: ダイアログ内容の最大幅/最小幅を固定
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 320, maxWidth: 420),
-          child: SizedBox(
-            width: 360, // ← 実際に使う固定幅（お好みで 340〜420 などに）
-            child: TextField(
-              controller: _messageCtrl,
-              keyboardType: TextInputType.multiline,
-              textInputAction: TextInputAction.newline,
-              minLines: 4,
-              maxLines: 4, // ← 高さは4行で固定、超えた分は内部スクロール
-              expands: false,
-              style: AppTypography.body(color: AppPalette.black),
-              decoration: InputDecoration(
-                hintText: '（任意）スタッフへ一言メッセージ',
-                hintStyle: AppTypography.small(color: AppPalette.textSecondary),
-                filled: true,
-                fillColor: AppPalette.white,
-                contentPadding: const EdgeInsets.all(12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: AppPalette.black,
-                    width: AppDims.border,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: AppPalette.black,
-                    width: AppDims.border,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: AppPalette.black,
-                    width: AppDims.border2,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              _messageCtrl.clear();
-              Navigator.pop(context, true);
-            },
-            child: const Text('クリア'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('キャンセル'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-
-    if (saved == true) {
-      setState(() {
-        final t = _messageCtrl.text.trim();
-        _senderMessage = t.isEmpty ? null : t;
-      });
-    }
-  }
-
-  void _initFromUrlIfNeeded() async {
+  Future<void> _initFromUrlIfNeeded() async {
     // すでに埋まっていれば二度目は何もしない
     if (tenantId != null && employeeId != null) return;
 
@@ -227,11 +175,6 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
       direct = true;
     }
 
-    // name = name ?? pickAny(['name', 'n']);
-    // email = email ?? pickAny(['email', 'mail']);
-    // photoUrl = photoUrl ?? pickAny(['photoUrl', 'p']);
-    // tenantName = tenantName ?? pickAny(['tenantName', 'store']);
-
     tenantId = tenantId ?? t;
     employeeId = employeeId ?? e;
     await _resolveUidIfNeeded();
@@ -241,8 +184,8 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     }
 
     if (mounted) setState(() {});
-    _maybeFetchFromFirestore();
-    _updateAllowMessage();
+    // _maybeFetchFromFirestore();
+    // _updateAllowMessage();
   }
 
   Future<void> _resolveUidIfNeeded() async {
@@ -315,7 +258,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     if (tenantId == null || employeeId == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('スタッフ情報が不明です')));
+      ).showSnackBar(SnackBar(content: Text(tr('status.staff_unknown'))));
       return;
     }
     final amount = _currentAmount();
@@ -395,7 +338,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
               side: BorderSide(color: AppPalette.black, width: AppDims.border),
             ),
             title: Text(
-              'メッセージを贈ろう！',
+              tr('dialog.send_message_title'),
               style: AppTypography.label(color: AppPalette.black),
             ),
             // ★ content 側も最大/最小幅を制限し、TextField を4行固定に
@@ -413,7 +356,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                   expands: false,
                   style: AppTypography.body(color: AppPalette.black),
                   decoration: InputDecoration(
-                    hintText: '（任意）スタッフへ一言メッセージ',
+                    hintText: tr('dialog.message_hint'),
                     hintStyle: AppTypography.small(
                       color: AppPalette.textSecondary,
                     ),
@@ -455,24 +398,36 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                   TextButton(
                     onPressed: () =>
                         Navigator.pop(context, _CommentAction.cancel),
-                    child: const Text(
-                      '戻る',
-                      style: TextStyle(fontFamily: "LINEseed", fontSize: 12),
+                    // child: const Text('戻る', ...),
+                    child: Text(
+                      tr('button.back'),
+                      style: const TextStyle(
+                        fontFamily: "LINEseed",
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   OutlinedButton(
                     onPressed: () =>
                         Navigator.pop(context, _CommentAction.skip),
-                    child: const Text(
-                      'スキップ',
-                      style: TextStyle(fontFamily: "LINEseed", fontSize: 12),
+                    // child: const Text('スキップ', ...),
+                    child: Text(
+                      tr('button.skip'),
+                      style: const TextStyle(
+                        fontFamily: "LINEseed",
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                   FilledButton(
                     onPressed: () => Navigator.pop(context, _CommentAction.ok),
-                    child: const Text(
-                      '送信',
-                      style: TextStyle(fontFamily: "LINEseed", fontSize: 12),
+                    // child: const Text('送信', ...),
+                    child: Text(
+                      tr('button.send'),
+                      style: const TextStyle(
+                        fontFamily: "LINEseed",
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -534,7 +489,6 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
 
       final data = Map<String, dynamic>.from(result.data as Map);
       final checkoutUrl = data['checkoutUrl'] as String;
-      final sessionId = data['sessionId'] as String;
 
       await launchUrlString(
         checkoutUrl,
@@ -550,17 +504,14 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     }
   }
 
-  String _fmt(int n) => n.toString();
+  Widget _buildIntro() {
+    return const IntroScaffold();
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    // まず tenantId が無ければ 404
+  Widget _buildMain(BuildContext context) {
     if (tenantId == null || tenantId!.isEmpty) {
-      return const Scaffold(body: Center(child: Text('店舗が見つかりません')));
-    }
-    // uid 解決待ち（tenantIndex からの補完など）
-    if (uid == null || uid!.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      // return const Scaffold(body: Center(child: Text('店舗が見つかりません')));
+      return Scaffold(body: Center(child: Text(tr('status.not_found'))));
     }
 
     // tenant ステータス監視（nonactive をブロック）
@@ -568,22 +519,14 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
         .collection(uid!)
         .doc(tenantId)
         .snapshots();
-
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: tenantDocStream,
       builder: (context, tSnap) {
         if (tSnap.hasError) {
           return const Scaffold(body: Center(child: Text('読み込みに失敗しました')));
         }
-        if (!tSnap.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
         final tData = tSnap.data!.data();
         final status = (tData?['status'] as String?)?.toLowerCase() ?? 'active';
-
         // ===== 店舗が nonactive（審査/初期設定未完了など）ならブロック表示 =====
         if (status == 'nonactive') {
           return Scaffold(
@@ -621,13 +564,15 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '店舗側の登録が完了していません',
+                      // '店舗側の登録が完了していません',
+                      tr('status.store_not_ready_title'),
                       style: AppTypography.label(color: AppPalette.black),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '現在この店舗ではチップを受け付けていません。時間をおいて再度お試しください。',
+                      // '現在この店舗ではチップを受け付けていません。時間をおいて再度お試しください。',
+                      tr('status.store_not_ready_desc'),
                       style: AppTypography.body(
                         color: AppPalette.textSecondary,
                       ),
@@ -644,7 +589,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                           ),
                         ),
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('戻る'),
+                        child: Text(tr('button.back')),
                       ),
                   ],
                 ),
@@ -939,8 +884,20 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
             ),
           ),
         );
-        // ===== ここまで従来の UI =====
       },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      child: _showIntro ? _buildIntro() : _buildMain(context),
     );
   }
 }

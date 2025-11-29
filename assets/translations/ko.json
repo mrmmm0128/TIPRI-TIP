@@ -1,43 +1,82 @@
 {
-    "app_title": "팁 앱",
-    "store0": "매장",
-    "staff": {
-      "number": "{rank}위",
-      "ranking": "확정 칩 수령액 순위"
+  "introduction": "도입은 이쪽",
+  "staff_detail_title": "직원 상세",
+  "dialog": {
+    "edit_message_title": "메시지 추가",
+    "send_message_title": "메시지를 보내요!",
+    "message_hint": "(선택) 직원에게 한마디 메시지"
+  },
+  "app_title": "팁 앱",
+  "store0": "매장",
+  "staff": {
+    "number": "{rank}위",
+    "ranking": "확정 팁 수령액 순위"
+  },
+  "section": {
+    "members": "직원에게 팁을 보내세요",
+    "store": "매장에 팁을 보내세요",
+    "initiate1": "협조 부탁드립니다",
+    "initiate2": "Tipri를 도입해 보세요"
+  },
+  "button": {
+    "send_tip": "팁 보내기",
+    "send_tip_for_store": "매장에 팁 보내기",
+    "LINE": "공식 LINE",
+    "Google_review": "Google 리뷰",
+    "search_staff": "이름으로 검색",
+    "see_more": "더보기",
+    "close": "닫기",
+    "cancel": "취소",
+    "clear": "지우기",
+    "save": "저장",
+    "back": "뒤로",
+    "skip": "건너뛰기",
+    "send": "보내기"
+  },
+  "status": {
+    "processing": "처리 중...",
+    "no_staff": "해당 직원이 없습니다",
+    "not_found": "매장을 찾을 수 없습니다 (URL을 확인해 주세요)",
+    "staff_unknown": "직원 정보가 확인되지 않았습니다",
+    "load_failed": "불러오기에 실패했습니다",
+    "store_not_ready_title": "매장 등록이 완료되지 않았습니다",
+    "store_not_ready_desc": "현재 이 매장은 팁을 받지 않고 있습니다. 잠시 후 다시 시도해 주세요.",
+    "store_info_missing": "매장 정보를 가져오지 못했습니다 (t/tenantId가 필요합니다)"
+  },
+  "validation": {
+    "tip": {
+      "min": "팁은 100엔부터 보낼 수 있습니다",
+      "max": "금액이 너무 큽니다 (최대 1,000,000엔)"
     },
-    "section": {
-      "members": "직원",
-      "store": "가게에 칩을 주자",
-      "initiate1": "협조 부탁드립니다",
-      "initiate2": "Tipri 도입하기"
-    },
-    "button": {
-      "send_tip": "팁 보내기",
-      "send_tip_for_store": "매장에 팁 보내기",
-      "LINE": "공식 LINE",
-      "Google_review": "Google 리뷰",
-      "search_staff": "이름으로 검색",
-      "see_more": "더보기",
-      "close": "닫기",
-      "cancel": "취소"
-    },
-    "status": {
-      "processing": "처리 중...",
-      "no_staff": "해당 직원이 없습니다",
-      "not_found": "매장을 찾을 수 없습니다(URL을 확인해 주세요)"
-    },
-    "validation": {
-      "tip": {
-        "min": "팁은 100엔부터 보낼 수 있습니다",
-        "max": "금액이 너무 큽니다(최대 100만 엔)"
-      }
-    },
-    "stripe": {
-      "attention": "1~1,000,000 엔 사이로 입력해 주세요",
-      "miss_URL": "결제 URL을 가져오지 못했습니다",
-      "error": "오류: {}",
-      "tip_for_store": "매장에 팁 보내기",
-      "tip_for_store1": "{tenantName}에 팁 보내기"
-    }
-  }
-  
+    "value": "팁 금액",
+    "clear": "지우기"
+  },
+  "stripe": {
+    "attention": "1~1,000,000엔 사이로 입력해 주세요",
+    "miss_URL": "결제 URL을 가져오지 못했습니다",
+    "error": "오류: {}",
+    "tip_for_store": "매장에 팁 보내기",
+    "tip_for_store1": "{tenantName}에 팁 보내기"
+  },
+  "success_page": {
+    "title": "송금 성공",
+    "store": "매장",
+    "initiate1": "다른 직원에게도 팁을 보내기",
+    "success": "팁을 전송했습니다",
+    "for": "수신인: {Name}",
+    "amount": "금액: {Amount}",
+    "initiate2": "협조 부탁드립니다",
+    "initiate21": "Google 리뷰 작성하기",
+    "initiate22": "공식 LINE에 등록하기",
+    "thanks_from_store": "매장의 메시지",
+    "no_video": "아직 준비된 영상이 없습니다"
+  },
+  "video": {
+    "play_failed": "영상을 재생할 수 없습니다\n{error}"
+  },
+  "hint": {
+  "swipe_toggle": "가로로 스와이프하여 보기 전환",
+  "swipe_scroll": "스와이프하여 스크롤"
+}
+
+}

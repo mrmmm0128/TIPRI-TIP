@@ -1,17 +1,18 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class BottomInstallCtaEdgeToEdge extends StatelessWidget {
   const BottomInstallCtaEdgeToEdge({
     super.key,
     this.url = 'https://www.zotman.jp/tipri',
-    this.label = '導入はコチラ',
+    this.label,
     this.topRadius = 14.0, // ← 上だけ丸める量（お好みで）
   });
 
   final String url;
-  final String label;
+  final String? label;
   final double topRadius;
 
   static const _brandYellow = Color(0xFFFCC400);
@@ -29,6 +30,8 @@ class BottomInstallCtaEdgeToEdge extends StatelessWidget {
 
     final bottomInset = MediaQuery.of(context).viewPadding.bottom;
     final innerBottomPad = math.max(0.0, bottomInset - 2.0);
+    final effectiveLabel =
+        label ?? tr('introduction'); // or 'introduction'.tr();
 
     return SizedBox(
       height: _height + innerBottomPad,
@@ -77,7 +80,7 @@ class BottomInstallCtaEdgeToEdge extends StatelessWidget {
                   padding: EdgeInsets.only(bottom: innerBottomPad),
                   child: Center(
                     child: Text(
-                      label,
+                      effectiveLabel,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 20,

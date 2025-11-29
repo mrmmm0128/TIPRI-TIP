@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // ===== あなたの既存ページ =====
 import 'package:yourpay/endUser/tip_complete_page.dart';
@@ -23,12 +23,24 @@ FirebaseOptions web = const FirebaseOptions(
 );
 
 Future<void> main() async {
-  setUrlStrategy(const HashUrlStrategy());
   WidgetsFlutterBinding.ensureInitialized();
-  await EasyLocalization.ensureInitialized();
+  setUrlStrategy(const HashUrlStrategy());
+
+  // 🔥 first-frame を最速で出すための簡易アプリで即起動
+  runApp(const _BootstrapApp());
+
+  // 🔥 本命処理は裏で（初回描画をブロックしない）
+  unawaited(_startRealApp());
+}
+
+Future<void> _startRealApp() async {
+  // Firebase 初期化（これが Web だと重い → 遅延するのが正解）
   await Firebase.initializeApp(options: web);
 
-  // 画面が真っ白になっても原因が見えるように
+  // EasyLocalization の初期化も後回しにする
+  await EasyLocalization.ensureInitialized();
+
+  // エラーウィジェット（白画面のまま固まるのを防ぐ）
   ErrorWidget.builder = (FlutterErrorDetails details) {
     if (kReleaseMode) {
       return const Material(
@@ -50,29 +62,34 @@ Future<void> main() async {
     );
   };
 
-  runZonedGuarded(
-    () {
-      runApp(
-        EasyLocalization(
-          supportedLocales: const [
-            Locale('en'),
-            Locale('ja'),
-            Locale('ko'),
-            Locale('zh'),
-          ],
-          path: 'assets/translations',
-          fallbackLocale: const Locale('en'),
-          useOnlyLangCode: true,
-          child: const MyApp(),
-        ),
-      );
-    },
-    (error, stack) {
-      // Webのコンソールにも確実に出す
-      // ignore: avoid_print
-      print('Uncaught zone error: $error\n$stack');
-    },
+  // 本物のアプリを起動
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [
+        Locale('en'),
+        Locale('ja'),
+        Locale('ko'),
+        Locale('zh'),
+      ],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('en'),
+      useOnlyLangCode: true,
+      child: const MyApp(),
+    ),
   );
+}
+
+/// first-frame を最速で出すためのプレースホルダーアプリ
+class _BootstrapApp extends StatelessWidget {
+  const _BootstrapApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(backgroundColor: Colors.white),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -109,7 +126,6 @@ class MyApp extends StatelessWidget {
         );
       }
 
-      // t のみ or パラメータ無しの場合は公開ページへ
       return MaterialPageRoute(
         builder: (_) => const PublicStorePage(),
         settings: RouteSettings(
@@ -119,11 +135,9 @@ class MyApp extends StatelessWidget {
       );
     }
 
-    // それ以外の静的ルート
     final staticRoutes = <String, WidgetBuilder>{
       '/': (_) => const Root(),
       '/staff': (_) => const StaffDetailPage(),
-      // '/p' はクエリ駆動のため staticRoutes には入れない
     };
 
     final builder = staticRoutes[uri.path];
@@ -131,7 +145,6 @@ class MyApp extends StatelessWidget {
       return MaterialPageRoute(builder: builder, settings: settings);
     }
 
-    // どれにも該当しない場合は404
     return MaterialPageRoute(
       builder: (_) => NotFoundPage(requestedPath: name),
       settings: settings,
@@ -170,13 +183,12 @@ class Root extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+        // if (snap.connectionState == ConnectionState.waiting) {
+        //   return const Scaffold(
+        //     body: Center(child: CircularProgressIndicator()),
+        //   );
+        // }
 
-        // 現在のパス（HashStrategy対応）
         String currentPath() {
           final uri = Uri.base;
           if (uri.fragment.isNotEmpty) {
@@ -189,7 +201,6 @@ class Root extends StatelessWidget {
 
         final path = currentPath();
 
-        // ログイン不要で直接表示したい公開パス
         const publicPaths = {
           '/qr-all',
           '/qr-all/qr-builder',
@@ -198,16 +209,13 @@ class Root extends StatelessWidget {
           '/payer',
         };
 
-        // ❶ パブリックパスはログインに関係なくそのまま画面を返す
         if (publicPaths.contains(path)) {
           switch (path) {
             case '/staff':
               return const StaffDetailPage();
             case '/p':
-              // /#/p?t=... のようにクエリで分岐するのは onGenerateRoute 側に実装済み
               return const PublicStorePage();
             case '/payer':
-              // 実際は onGenerateRoute 側で sid クエリを読む
               return const _PlaceholderScaffold(title: 'Payer Landing');
             case '/qr-all':
             case '/qr-all/qr-builder':
@@ -215,14 +223,11 @@ class Root extends StatelessWidget {
           }
         }
 
-        // ❷ それ以外はログイン状態で分岐（必要に応じて変更してください）
         final user = snap.data;
         if (user == null) {
-          // 未ログイン時のトップ（公開トップ等に差し替え可）
           return const PublicStorePage();
         }
 
-        // ログイン済みのホーム画面（必要ならあなたの Home へ置き換え）
         return const _PlaceholderScaffold(title: 'Home (signed in)');
       },
     );
@@ -261,7 +266,6 @@ class NotFoundPage extends StatelessWidget {
   }
 }
 
-/// 簡易プレースホルダー（本番では該当画面に置き換えてください）
 class _PlaceholderScaffold extends StatelessWidget {
   final String title;
   const _PlaceholderScaffold({required this.title});

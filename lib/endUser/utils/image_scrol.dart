@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 /// 横スクロール固定の画像ビューア
@@ -213,7 +214,7 @@ class _SwipeHint extends StatelessWidget {
           const Icon(Icons.swipe, size: 18, color: Colors.black54),
           const SizedBox(width: 6),
           Text(
-            isHorizontal ? '横にスワイプして表示を切り替え' : 'スワイプでスクロール',
+            isHorizontal ? tr('hint.swipe_toggle') : tr('hint.swipe_scroll'),
             style: const TextStyle(color: Colors.black54, fontSize: 12),
           ),
         ],

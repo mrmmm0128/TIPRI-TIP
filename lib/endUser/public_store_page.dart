@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +7,9 @@ import 'package:yourpay/endUser/utils/BottomInstallCta.dart';
 import 'package:yourpay/endUser/utils/design.dart';
 import 'package:yourpay/endUser/utils/fetchUidByTenantId.dart';
 import 'package:yourpay/endUser/utils/image_scrol.dart';
+import 'package:yourpay/endUser/utils/ranking.dart';
+import 'package:yourpay/endUser/utils/store_tip_bottomsheet.dart';
+import 'package:yourpay/endUser/utils/yellow_action_buttom.dart';
 
 /// 黒フチ × 黄色の“縁取りテキスト”
 class StrokeText extends StatelessWidget {
@@ -299,7 +301,7 @@ class PublicStorePageState extends State<PublicStorePage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (_) =>
-          _StoreTipBottomSheet(tenantId: tenantId!, tenantName: tenantName),
+          StoreTipBottomSheet(tenantId: tenantId!, tenantName: tenantName),
     );
   }
 
@@ -308,7 +310,6 @@ class PublicStorePageState extends State<PublicStorePage> {
     if (_showIntro) {
       return Scaffold(
         backgroundColor: AppPalette.yellow,
-
         body: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
@@ -362,10 +363,6 @@ class PublicStorePageState extends State<PublicStorePage> {
     if (tenantId == null) {
       return Scaffold(body: Center(child: Text(tr("status.not_found"))));
     }
-    // uid がまだ解決できていない → ローディング表示にして Firestore を触らない
-    if (uid == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
 
     final tenantDocStream = FirebaseFirestore.instance
         .collection(uid!)
@@ -385,11 +382,11 @@ class PublicStorePageState extends State<PublicStorePage> {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: tenantDocStream,
       builder: (context, tSnap) {
-        if (tSnap.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+        // if (tSnap.connectionState == ConnectionState.waiting) {
+        //   return const Scaffold(
+        //     body: Center(child: CircularProgressIndicator()),
+        //   );
+        // }
         final tData = tSnap.data?.data();
         final status = (tData?['status'] as String?)?.toLowerCase();
         if (status == 'nonactive') {
@@ -546,219 +543,12 @@ class PublicStorePageState extends State<PublicStorePage> {
                 const SizedBox(height: 10),
                 Center(child: Text(tr('staff.ranking'))),
                 const SizedBox(height: 10),
-
-                // tips を購読して totals を作成 → employees を購読して並べる
-                StreamBuilder<QuerySnapshot>(
-                  stream: tipsStream,
-                  builder: (context, tipSnap) {
-                    final Map<String, int> totals = {};
-                    if (tipSnap.hasData) {
-                      for (final d in tipSnap.data!.docs) {
-                        final data = d.data() as Map<String, dynamic>;
-                        final rec = (data['recipient'] as Map?)
-                            ?.cast<String, dynamic>();
-                        final employeeId =
-                            (data['employeeId'] as String?) ??
-                            rec?['employeeId'] as String?;
-                        final cur =
-                            (data['currency'] as String?)?.toUpperCase() ??
-                            'JPY';
-                        if (employeeId == null || employeeId.isEmpty) continue;
-                        if (cur != 'JPY') continue;
-                        final amount = (data['amount'] as num?)?.toInt() ?? 0;
-                        totals[employeeId] = (totals[employeeId] ?? 0) + amount;
-                      }
-                    }
-
-                    return StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection(uid!)
-                          .doc(tenantId)
-                          .collection('employees')
-                          .orderBy('createdAt', descending: true)
-                          .snapshots(),
-                      builder: (context, snap) {
-                        if (snap.hasError) {
-                          return Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              tr("stripe.error", args: [snap.toString()]),
-                            ),
-                          );
-                        }
-                        if (!snap.hasData) {
-                          return const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Center(child: CircularProgressIndicator()),
-                          );
-                        }
-
-                        final all = snap.data!.docs.toList();
-                        final filtered = all.where((doc) {
-                          final d = doc.data() as Map<String, dynamic>;
-                          final nm = (d['name'] ?? '').toString().toLowerCase();
-                          return _query.isEmpty || nm.contains(_query);
-                        }).toList();
-
-                        if (filtered.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Center(child: Text('スタッフが見つかりません')),
-                          );
-                        }
-
-                        filtered.sort((a, b) {
-                          final ta = totals[a.id] ?? 0;
-                          final tb = totals[b.id] ?? 0;
-                          if (tb != ta) return tb.compareTo(ta);
-                          final ca =
-                              (a.data() as Map<String, dynamic>)['createdAt'];
-                          final cb =
-                              (b.data() as Map<String, dynamic>)['createdAt'];
-                          final da = (ca is Timestamp)
-                              ? ca.toDate()
-                              : DateTime.fromMillisecondsSinceEpoch(0);
-                          final db = (cb is Timestamp)
-                              ? cb.toDate()
-                              : DateTime.fromMillisecondsSinceEpoch(0);
-                          return db.compareTo(da);
-                        });
-
-                        // ① ランク母集団は「チップ>0 の人だけ」
-                        final rankedIdsByTip = filtered
-                            .map((d) => d.id)
-                            .where((id) => (totals[id] ?? 0) > 0)
-                            .toList();
-
-                        // ② ランク取得。0円なら null（=非表示）
-                        int? rankOf(String id) {
-                          if ((totals[id] ?? 0) <= 0) return null;
-                          final idx = rankedIdsByTip.indexOf(id);
-                          if (idx < 0) return null;
-                          return idx + 1;
-                        }
-
-                        return Column(
-                          children: [
-                            ValueListenableBuilder<bool>(
-                              valueListenable: _showAllMembersVN,
-                              builder: (context, showAll, _) {
-                                final displayList = showAll
-                                    ? filtered
-                                    : filtered.take(6).toList();
-
-                                return Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    AppDims.pad,
-                                    8,
-                                    AppDims.pad,
-                                    0,
-                                  ),
-                                  child: LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final w = constraints.maxWidth;
-                                      int cross = 2;
-                                      if (w >= 1100) {
-                                        cross = 5;
-                                      } else if (w >= 900) {
-                                        cross = 4;
-                                      } else if (w >= 680) {
-                                        cross = 3;
-                                      }
-
-                                      return GridView.builder(
-                                        key: ValueKey(
-                                          'grid-${showAll ? "all" : "top6"}',
-                                        ),
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        gridDelegate:
-                                            SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: cross,
-                                              mainAxisSpacing: 14,
-                                              crossAxisSpacing: 14,
-                                              mainAxisExtent: 200,
-                                            ),
-                                        itemCount: displayList.length,
-                                        itemBuilder: (_, i) {
-                                          final doc = displayList[i];
-                                          final data =
-                                              doc.data()
-                                                  as Map<String, dynamic>;
-                                          final id = doc.id;
-                                          final name =
-                                              (data['name'] ?? '') as String;
-                                          final email =
-                                              (data['email'] ?? '') as String;
-                                          final photoUrl =
-                                              (data['photoUrl'] ?? '')
-                                                  as String;
-
-                                          // ③ rankLabel は 1〜4 位のみ。0円は null（＝非表示）
-                                          final r = rankOf(id);
-                                          final String? rankLabel =
-                                              (r != null && r >= 1 && r <= 4)
-                                              ? tr(
-                                                  'staff.number',
-                                                  namedArgs: {'rank': '$r'},
-                                                )
-                                              : null;
-
-                                          return _RankedMemberCard(
-                                            rankLabel:
-                                                rankLabel, // ← String? にして null OK
-                                            name: name,
-                                            photoUrl: photoUrl,
-                                            onTap: () {
-                                              Navigator.pushNamed(
-                                                context,
-                                                '/staff',
-                                                arguments: {
-                                                  'tenantId': tenantId,
-                                                  'tenantName': tenantName,
-                                                  'employeeId': id,
-                                                  'name': name,
-                                                  'email': email,
-                                                  'photoUrl': photoUrl,
-                                                  'uid': uid,
-                                                },
-                                              );
-                                            },
-                                          );
-                                        },
-                                      );
-                                    },
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 8),
-                            // 「もっとみる」ボタン（これも部分更新）
-                            Center(
-                              child: ValueListenableBuilder<bool>(
-                                valueListenable: _showAllMembersVN,
-                                builder: (context, showAll, _) {
-                                  return TextButton(
-                                    onPressed: () =>
-                                        _showAllMembersVN.value = !showAll,
-                                    child: Text(
-                                      showAll
-                                          ? tr('button.close')
-                                          : tr('button.see_more'),
-                                      style: AppTypography.label2(
-                                        color: AppPalette.textSecondary,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
+                StaffRankingSection(
+                  tipsStream: tipsStream,
+                  uid: uid!, // もともと使っていた uid
+                  tenantId: tenantId!, // もともと使っていた tenantId
+                  tenantName: tenantName, // もともと arguments に渡していた tenantName
+                  query: _query, // 名前検索用の文字列
                 ),
 
                 // ── お店にチップ ─────────────────────────────
@@ -767,7 +557,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                   padding: const EdgeInsets.symmetric(horizontal: AppDims.pad),
                   child: SizedBox(
                     height: 100,
-                    child: _YellowActionButton(
+                    child: YellowActionButton(
                       label: tr('button.send_tip_for_store'),
                       icon: Icons.currency_yen,
                       onPressed: openStoreTipSheet,
@@ -786,7 +576,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                       children: [
                         SizedBox(
                           height: 100,
-                          child: _YellowActionButton(
+                          child: YellowActionButton(
                             label: tr('button.LINE'),
                             onPressed: () => _openLinkOrNotify(lineUrl),
                           ),
@@ -808,7 +598,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                       children: [
                         SizedBox(
                           height: 100,
-                          child: _YellowActionButton(
+                          child: YellowActionButton(
                             label: tr('button.LINE'),
                             onPressed: () => _openLinkOrNotify(lineUrl),
                           ),
@@ -816,7 +606,7 @@ class PublicStorePageState extends State<PublicStorePage> {
                         const SizedBox(height: 15),
                         SizedBox(
                           height: 100,
-                          child: _YellowActionButton(
+                          child: YellowActionButton(
                             label: tr('button.Google_review'),
                             onPressed: () => _openLinkOrNotify(googleReviewUrl),
                           ),
@@ -827,141 +617,56 @@ class PublicStorePageState extends State<PublicStorePage> {
                 ],
 
                 // ── チップリを導入しよう（PR） ─────────────────
-                _Sectionbar(title: tr('section.initiate2')),
-                if (isNarrow) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDims.pad,
-                    ),
-                    child: SizedBox(
-                      height: 640,
-                      child: ImagesScroller(
-                        assets: const [
-                          'assets/pdf/1.jpg',
-                          'assets/pdf/2.jpg',
-                          'assets/pdf/3.jpg',
-                          'assets/pdf/4.jpg',
-                          'assets/pdf/5.jpg',
-                          'assets/pdf/6.jpg',
-                          'assets/pdf/7.jpg',
-                        ],
-                        borderRadius: 12,
-                      ),
-                    ),
-                  ),
-                ],
-                if (!isNarrow) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDims.pad,
-                    ),
-                    child: SizedBox(
-                      height: 640,
-                      child: ImagesScroller(
-                        assets: const [
-                          'assets/pdf/PC_1.jpg',
-                          'assets/pdf/PC_2.jpg',
-                          'assets/pdf/PC_3.jpg',
-                          'assets/pdf/PC_4.jpg',
-                          'assets/pdf/PC_5.jpg',
-                          'assets/pdf/PC_6.jpg',
-                        ],
-                        borderRadius: 12,
-                      ),
-                    ),
-                  ),
-                ],
+                // _Sectionbar(title: tr('section.initiate2')),
+                // if (isNarrow) ...[
+                //   Padding(
+                //     padding: const EdgeInsets.symmetric(
+                //       horizontal: AppDims.pad,
+                //     ),
+                //     child: SizedBox(
+                //       height: 640,
+                //       child: ImagesScroller(
+                //         assets: const [
+                //           'assets/pdf/1.jpg',
+                //           'assets/pdf/2.jpg',
+                //           'assets/pdf/3.jpg',
+                //           'assets/pdf/4.jpg',
+                //           'assets/pdf/5.jpg',
+                //           'assets/pdf/6.jpg',
+                //           'assets/pdf/7.jpg',
+                //         ],
+                //         borderRadius: 12,
+                //       ),
+                //     ),
+                //   ),
+                // ],
+                // if (!isNarrow) ...[
+                //   Padding(
+                //     padding: const EdgeInsets.symmetric(
+                //       horizontal: AppDims.pad,
+                //     ),
+                //     child: SizedBox(
+                //       height: 640,
+                //       child: ImagesScroller(
+                //         assets: const [
+                //           'assets/pdf/PC_1.jpg',
+                //           'assets/pdf/PC_2.jpg',
+                //           'assets/pdf/PC_3.jpg',
+                //           'assets/pdf/PC_4.jpg',
+                //           'assets/pdf/PC_5.jpg',
+                //           'assets/pdf/PC_6.jpg',
+                //         ],
+                //         borderRadius: 12,
+                //       ),
+                //     ),
+                //   ),
+                // ],
                 const SizedBox(height: 10),
               ],
             ),
           ),
         );
       },
-    );
-  }
-}
-
-/// 黄色×黒の大ボタン（色は任意で上書き可）
-class _YellowActionButton extends StatelessWidget {
-  final String label;
-  final IconData? icon;
-  final VoidCallback? onPressed;
-  final bool loading;
-
-  /// 背景色。未指定(null)なら AppPalette.yellow を使用
-  final Color? color;
-
-  const _YellowActionButton({
-    required this.label,
-    this.icon,
-    this.onPressed,
-    this.color,
-    this.loading = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = color ?? AppPalette.yellow;
-    final spinnerColor = bg.computeLuminance() < 0.5
-        ? Colors.white
-        : Colors.black;
-
-    final child = Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (icon != null) ...[
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppPalette.white,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppPalette.black,
-                width: AppDims.border2,
-              ),
-            ),
-            child: Icon(icon, color: AppPalette.black, size: 38),
-          ),
-          const SizedBox(width: 16),
-        ],
-        Text(label, style: AppTypography.label2(color: AppPalette.black)),
-      ],
-    );
-
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(AppDims.radius),
-      child: InkWell(
-        onTap: loading ? null : onPressed,
-        borderRadius: BorderRadius.circular(AppDims.radius),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppDims.radius),
-            border: Border.all(color: AppPalette.border, width: AppDims.border),
-          ),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            transitionBuilder: (c, a) => FadeTransition(opacity: a, child: c),
-            child: loading
-                ? SizedBox(
-                    key: const ValueKey('spinner'),
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(spinnerColor),
-                    ),
-                  )
-                : DefaultTextStyle.merge(
-                    key: const ValueKey('content'),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                    child: child,
-                  ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1072,421 +777,4 @@ class _SectionbarPainter extends CustomPainter {
       old.notchWidth != notchWidth ||
       old.notchHeight != notchHeight ||
       old.alignX != alignX;
-}
-
-/// ランキング風メンバーカード（黄色地＋黒枠）
-class _RankedMemberCard extends StatelessWidget {
-  /// 1〜4位などの文言。null なら順位UIは一切出さない
-  final String? rankLabel;
-  final String name;
-  final String photoUrl;
-  final VoidCallback? onTap;
-
-  const _RankedMemberCard({
-    super.key,
-    this.rankLabel, // ← nullable に変更
-    required this.name,
-    required this.photoUrl,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = photoUrl.isNotEmpty;
-    final showRank = (rankLabel != null && rankLabel!.isNotEmpty);
-
-    return Material(
-      color: AppPalette.yellow,
-      borderRadius: BorderRadius.circular(AppDims.radius),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppDims.radius),
-            border: Border.all(color: AppPalette.black, width: AppDims.border),
-          ),
-          child: Column(
-            children: [
-              showRank
-                  ? Text(
-                      rankLabel!, // ← 表示は順位がある時だけ
-                      style: AppTypography.body(color: AppPalette.black),
-                    )
-                  : Text(
-                      "", // ← 表示は順位がある時だけ
-                      style: AppTypography.body(color: AppPalette.black),
-                    ),
-              const SizedBox(height: 4),
-              Container(
-                height: AppDims.border2,
-                decoration: BoxDecoration(
-                  color: AppPalette.black,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              const SizedBox(height: 8), // レイアウトの目安（好みで調整）
-              Container(
-                width: 84,
-                height: 84,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppPalette.white,
-                  border: Border.all(
-                    color: AppPalette.black,
-                    width: AppDims.border2,
-                  ),
-                  image: hasPhoto
-                      ? DecorationImage(
-                          image: NetworkImage(photoUrl),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: !hasPhoto
-                    ? Icon(
-                        Icons.person,
-                        color: AppPalette.black.withOpacity(.65),
-                        size: 36,
-                      )
-                    : null,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                name.isEmpty ? 'スタッフ' : name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.body(color: AppPalette.black),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// ───────────────────────────────────────────────────────────────
-/// 店舗チップ用 BottomSheet（既存のまま/色はデフォルト）
-/// ───────────────────────────────────────────────────────────────
-class _StoreTipBottomSheet extends StatefulWidget {
-  final String tenantId;
-  final String? tenantName;
-  const _StoreTipBottomSheet({required this.tenantId, this.tenantName});
-
-  @override
-  State<_StoreTipBottomSheet> createState() => _StoreTipBottomSheetState();
-}
-
-class _StoreTipBottomSheetState extends State<_StoreTipBottomSheet> {
-  int _amount = 500;
-  bool _loading = false;
-
-  static const int _maxStoreTip = 1000000;
-  final _presets = const [1000, 3000, 5000, 10000];
-
-  void _setAmount(int v) => setState(() => _amount = v.clamp(0, _maxStoreTip));
-  void _appendDigit(int d) =>
-      setState(() => _amount = (_amount * 10 + d).clamp(0, _maxStoreTip));
-  void _appendDoubleZero() => setState(
-    () => _amount = _amount == 0 ? 0 : (_amount * 100).clamp(0, _maxStoreTip),
-  );
-  void _backspace() => setState(() => _amount = _amount ~/ 10);
-  String _fmt(int n) => n.toString();
-
-  Future<void> _goStripe() async {
-    if (_amount <= 0 || _amount > _maxStoreTip) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('stripe.attention'))));
-      return;
-    }
-    setState(() => _loading = true);
-    try {
-      final callable = FirebaseFunctions.instance.httpsCallable(
-        'createStoreTipSessionPublic',
-      );
-      final res = await callable.call({
-        'tenantId': widget.tenantId,
-        'amount': _amount,
-        'memo': 'Tip to store ${widget.tenantName ?? ''}',
-      });
-      final data = Map<String, dynamic>.from(res.data as Map);
-      final checkoutUrl = data['checkoutUrl'] as String?;
-      if (checkoutUrl == null || checkoutUrl.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(tr('stripe.miss_URL'))));
-        return;
-      }
-      if (mounted) Navigator.pop(context);
-      await launchUrlString(
-        checkoutUrl,
-        mode: LaunchMode.platformDefault,
-        webOnlyWindowName: '_self',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr("stripe.error", args: [e.toString()]))),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final maxH = MediaQuery.of(context).size.height * 0.88;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxH),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.storefront, color: Colors.black87),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    tr('stripe.tip_for_store'),
-                    style: AppTypography.label(),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, color: AppPalette.black),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // 金額表示
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppPalette.black,
-                  width: AppDims.border,
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Text(
-                    '¥',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _fmt(_amount),
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _loading ? null : () => _setAmount(0),
-                    icon: const Icon(Icons.clear, color: AppPalette.black),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // 💡 プリセット（_loading中は無効＆薄く）
-            Opacity(
-              opacity: _loading ? 0.5 : 1,
-              child: IgnorePointer(
-                ignoring: _loading,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: _presets.map((v) {
-                      final active = _amount == v;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 2),
-                        child: ChoiceChip(
-                          side: BorderSide(
-                            color: AppPalette.border,
-                            width: AppDims.border2,
-                          ),
-                          label: Text('¥${_fmt(v)}'),
-                          selected: active,
-                          showCheckmark: false,
-                          backgroundColor: active
-                              ? AppPalette.black
-                              : AppPalette.white,
-                          selectedColor: AppPalette.black,
-                          labelStyle: TextStyle(
-                            color: active
-                                ? AppPalette.white
-                                : AppPalette.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          onSelected: (_) => _setAmount(v),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // 💡 テンキー（_loading中は無効＆薄く）
-            Opacity(
-              opacity: _loading ? 0.5 : 1,
-              child: IgnorePointer(
-                ignoring: _loading,
-                child: _Keypad(
-                  onTapDigit: _appendDigit,
-                  onTapDoubleZero: _appendDoubleZero,
-                  onBackspace: _backspace,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // アクションボタン
-            Row(
-              children: [
-                Flexible(
-                  flex: 1,
-                  child: _YellowActionButton(
-                    label: tr('button.cancel'),
-                    onPressed: _loading ? null : () => Navigator.pop(context),
-                    color: AppPalette.white,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  flex: 2,
-                  child: _YellowActionButton(
-                    label: tr('button.send_tip'),
-                    onPressed: _loading ? null : _goStripe,
-                    color: AppPalette.white,
-                    loading: _loading, // ← スピナー表示
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// テンキー
-class _Keypad extends StatelessWidget {
-  final void Function(int d) onTapDigit;
-  final VoidCallback onTapDoubleZero;
-  final VoidCallback onBackspace;
-  const _Keypad({
-    required this.onTapDigit,
-    required this.onTapDoubleZero,
-    required this.onBackspace,
-  });
-
-  Widget _btn(BuildContext ctx, String label, VoidCallback onPressed) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppPalette.white,
-        foregroundColor: AppPalette.black,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDims.radius),
-        ),
-        side: BorderSide(color: AppPalette.border, width: AppDims.border),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-      ),
-      onPressed: onPressed,
-      child: Text(label, style: AppTypography.label()),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: _btn(context, '1', () => onTapDigit(1))),
-            const SizedBox(width: 8),
-            Expanded(child: _btn(context, '2', () => onTapDigit(2))),
-            const SizedBox(width: 8),
-            Expanded(child: _btn(context, '3', () => onTapDigit(3))),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _btn(context, '4', () => onTapDigit(4))),
-            const SizedBox(width: 8),
-            Expanded(child: _btn(context, '5', () => onTapDigit(5))),
-            const SizedBox(width: 8),
-            Expanded(child: _btn(context, '6', () => onTapDigit(6))),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _btn(context, '7', () => onTapDigit(7))),
-            const SizedBox(width: 8),
-            Expanded(child: _btn(context, '8', () => onTapDigit(8))),
-            const SizedBox(width: 8),
-            Expanded(child: _btn(context, '9', () => onTapDigit(9))),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: _btn(context, '00', onTapDoubleZero)),
-            const SizedBox(width: 8),
-            Expanded(child: _btn(context, '0', () => onTapDigit(0))),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.white,
-                  foregroundColor: AppPalette.black,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppDims.radius),
-                  ),
-                  side: BorderSide(
-                    color: AppPalette.border,
-                    width: AppDims.border,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: onBackspace,
-                child: const Icon(Icons.backspace_outlined, size: 18),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 }

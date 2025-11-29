@@ -1,4 +1,5 @@
-{
+{"introduction": "導入はこちら",
+"staff_detail_title": "スタッフ詳細",
     "app_title": "チップアプリ",
     "store0": "店舗", 
     "staff" : {
@@ -19,12 +20,22 @@
         "search_staff" : "名前で検索する",
         "see_more" : "もっと見る",
         "close" : "閉じる",
-        "cancel" : "キャンセル"
+        "cancel" : "キャンセル",
+        "clear": "クリア",
+    "save": "保存",
+    "back": "戻る",
+    "skip": "スキップ",
+    "send": "送信"
     },
     "status": {
         "processing": "処理中...",
         "no_staff" : "該当するスタッフがいません",
-        "not_found" : "店舗が見つかりません（URLをご確認ください）"
+        "not_found" : "店舗が見つかりません（URLをご確認ください）",
+        "staff_unknown": "スタッフ情報が不明です",
+    "load_failed": "読み込みに失敗しました",
+    "store_not_ready_title": "店舗側の登録が完了していません",
+    "store_not_ready_desc": "現在この店舗ではチップを受け付けていません。時間をおいて再度お試しください。",
+    "store_info_missing": "店舗情報が取得できませんでした（t/tenantId が必要）"
     },
     "validation": {
         "tip": {
@@ -51,6 +62,20 @@
         "initiate2": "ご協力のお願い",
         "initiate21": "Googleの口コミに投稿する",
         "initiate22": "公式LINEに登録する",
-        "thanks_from_store": "お店からのメッセージ"
-    }
+        "thanks_from_store": "お店からのメッセージ",
+        "no_video": "動画がまだ用意されていません"
+    },
+    "dialog": {
+    "edit_message_title": "メッセージを添える",
+    "send_message_title": "メッセージを贈ろう！",
+    "message_hint": "（任意）スタッフへ一言メッセージ"
+  },
+  "video": {
+    "play_failed": "再生できませんでした\n{error}"
+  },
+  "hint": {
+  "swipe_toggle": "横にスワイプして表示を切り替え",
+  "swipe_scroll": "スワイプでスクロール"
+}
+    
 }

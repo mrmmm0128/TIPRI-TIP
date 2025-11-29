@@ -1,43 +1,83 @@
 {
-    "app_title": "打赏应用",
-    "store0": "店铺",
-    "staff": {
-      "number": "第{rank}名",
-      "ranking": "確認小費收入金額排名"
+  "introduction": "點這裡安裝",
+  "app_title": "打賞應用",
+  "store0": "店舖",
+  "staff_detail_title": "員工詳情",
+  "dialog": {
+    "edit_message_title": "新增留言",
+    "send_message_title": "送出留言！",
+    "message_hint": "（選填）給員工的一句話"
+  },
+  "staff": {
+    "number": "第{rank}名",
+    "ranking": "確認小費收入金額排名"
+  },
+  "section": {
+    "members": "給員工打賞",
+    "store": "給店舖打賞",
+    "initiate1": "請多多支持",
+    "initiate2": "開始使用 Tipri"
+  },
+  "button": {
+    "send_tip": "打賞",
+    "send_tip_for_store": "給店舖打賞",
+    "LINE": "LINE 官方帳號",
+    "Google_review": "Google 評論",
+    "search_staff": "按姓名搜尋",
+    "see_more": "查看更多",
+    "close": "關閉",
+    "cancel": "取消",
+    "clear": "清除",
+    "save": "儲存",
+    "back": "返回",
+    "skip": "略過",
+    "send": "送出"
+  },
+  "status": {
+    "processing": "處理中...",
+    "no_staff": "沒有符合的員工",
+    "not_found": "找不到店舖（請確認 URL）",
+    "staff_unknown": "無法取得員工資訊",
+    "load_failed": "載入失敗",
+    "store_not_ready_title": "店舖註冊尚未完成",
+    "store_not_ready_desc": "目前此店舖暫不接受打賞，請稍後再試。",
+    "store_info_missing": "無法取得店舖資訊（需要 t/tenantId）"
+  },
+  "validation": {
+    "tip": {
+      "min": "打賞金額至少 100 日圓",
+      "max": "金額過大（最高 1,000,000 日圓）"
     },
-    "section": {
-      "members": "職員",
-      "store": "给商店小费",
-      "initiate1": "请多多支持",
-      "initiate2": "开始使用 Tipri"
-    },
-    "button": {
-      "send_tip": "打赏",
-      "send_tip_for_store": "打赏店铺",
-      "LINE": "LINE 官方账号",
-      "Google_review": "Google 评价",
-      "search_staff": "按姓名搜索",
-      "see_more": "查看更多",
-      "close": "关闭",
-      "cancel": "取消"
-    },
-    "status": {
-      "processing": "处理中...",
-      "no_staff": "没有符合的员工",
-      "not_found": "未找到店铺（请检查 URL）"
-    },
-    "validation": {
-      "tip": {
-        "min": "打赏金额至少 100 日元",
-        "max": "金额过大（最高 100 万日元）"
-      }
-    },
-    "stripe": {
-      "attention": "请输入 1～1,000,000 日元",
-      "miss_URL": "获取结算 URL 失败",
-      "error": "错误：{}",
-      "tip_for_store": "打赏店铺",
-      "tip_for_store1": "给 {tenantName} 打赏"
-    }
-  }
-  
+    "value": "打賞金額",
+    "clear": "清除"
+  },
+  "stripe": {
+    "attention": "請輸入 1～1,000,000 日圓",
+    "miss_URL": "無法取得結帳 URL",
+    "error": "錯誤：{}",
+    "tip_for_store": "給店舖打賞",
+    "tip_for_store1": "給 {tenantName} 打賞"
+  },
+  "success_page": {
+    "title": "打賞成功",
+    "store": "店舖",
+    "initiate1": "再給其他員工打賞",
+    "success": "已成功打賞",
+    "for": "對象：{Name}",
+    "amount": "金額：{Amount}",
+    "initiate2": "請多多支持",
+    "initiate21": "撰寫 Google 評論",
+    "initiate22": "加入官方 LINE",
+    "thanks_from_store": "來自店舖的訊息",
+    "no_video": "目前沒有可播放的影片"
+    
+  },
+  "video": {
+    "play_failed": "無法播放影片\n{error}"
+  },
+  "hint": {
+  "swipe_toggle": "左右滑動以切換顯示",
+  "swipe_scroll": "滑動以滾動"
+}
+
+}
