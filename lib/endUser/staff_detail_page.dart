@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:yourpay/endUser/utils/Intro_scaffold.dart';
-
 import 'package:yourpay/endUser/utils/design.dart';
 import 'package:yourpay/endUser/utils/fetchPlan.dart'; // fetchPlanStringById を使う
 
@@ -16,6 +15,8 @@ class StaffDetailPage extends StatefulWidget {
 }
 
 enum _CommentAction { cancel, skip, ok }
+
+enum _TipMode { oneTime, subscription }
 
 class _StaffDetailPageState extends State<StaffDetailPage> {
   String? tenantId;
@@ -36,7 +37,9 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
   static const int _maxAmount = 1000000;
   bool _showIntro = true;
   bool _initStarted = false;
-  static const int _minSplashMs = 3000; // 2秒
+  static const int _minSplashMs = 3000;
+  _TipMode _mode = _TipMode.oneTime;
+  //int _subAmount = 1000; // サブスク用の選択金額
 
   @override
   void initState() {
@@ -51,16 +54,22 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
-      tenantId = args['tenantId'] as String?;
-      employeeId = args['employeeId'] as String?;
-      name = args['name'] as String?;
-      email = args['email'] as String?;
-      photoUrl = args['photoUrl'] as String?;
-      tenantName = args['tenantName'] as String?;
-      uid = args["uid"] as String?;
+      tenantId = args['tenantId'] as String? ?? tenantId;
+      employeeId = args['employeeId'] as String? ?? employeeId;
+      name = args['name'] as String? ?? name;
+      email = args['email'] as String? ?? email;
+      photoUrl = args['photoUrl'] as String? ?? photoUrl;
+      tenantName = args['tenantName'] as String? ?? tenantName;
+      uid = args['uid'] as String? ?? uid;
       direct = false;
-      //_updateAllowMessage();
-      //setState(() {});
+
+      // ★ 追加: 最初に開くモードを決める
+      final initialMode = args['initialMode'] as String?;
+      if (initialMode == 'subscription') {
+        _mode = _TipMode.subscription;
+      } else if (initialMode == 'oneTime') {
+        _mode = _TipMode.oneTime;
+      }
     }
   }
 
@@ -75,6 +84,97 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     final v = int.tryParse(_amountCtrl.text) ?? 0;
     return v.clamp(0, _maxAmount);
   }
+
+  // Widget _buildModeSwitcher() {
+  //   final isSub = _mode == _TipMode.subscription;
+
+  //   return Container(
+  //     padding: const EdgeInsets.all(4),
+  //     decoration: BoxDecoration(
+  //       color: AppPalette.white,
+  //       borderRadius: BorderRadius.circular(999),
+  //       border: Border.all(color: AppPalette.black, width: AppDims.border),
+  //     ),
+  //     child: Row(
+  //       children: [
+  //         // 一度きりタブ
+  //         Expanded(
+  //           child: GestureDetector(
+  //             onTap: () {
+  //               if (_mode != _TipMode.oneTime) {
+  //                 setState(() => _mode = _TipMode.oneTime);
+  //               }
+  //             },
+  //             child: AnimatedContainer(
+  //               duration: const Duration(milliseconds: 160),
+  //               curve: Curves.easeOut,
+  //               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+  //               decoration: BoxDecoration(
+  //                 color: !isSub ? AppPalette.black : Colors.transparent,
+  //                 borderRadius: BorderRadius.circular(999),
+  //               ),
+  //               child: Row(
+  //                 mainAxisAlignment: MainAxisAlignment.center,
+  //                 children: [
+  //                   const Icon(
+  //                     Icons.flash_on,
+  //                     size: 16,
+  //                     color: AppPalette.yellow,
+  //                   ),
+  //                   const SizedBox(width: 4),
+  //                   Text(
+  //                     '一度きり',
+  //                     style: AppTypography.small(
+  //                       color: !isSub
+  //                           ? AppPalette.white
+  //                           : AppPalette.textPrimary,
+  //                     ),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //           ),
+  //         ),
+  //         const SizedBox(width: 4),
+  //         // サブスクタブ
+  //         Expanded(
+  //           child: GestureDetector(
+  //             onTap: () {
+  //               if (_mode != _TipMode.subscription) {
+  //                 setState(() => _mode = _TipMode.subscription);
+  //               }
+  //             },
+  //             child: AnimatedContainer(
+  //               duration: const Duration(milliseconds: 160),
+  //               curve: Curves.easeOut,
+  //               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+  //               decoration: BoxDecoration(
+  //                 color: isSub ? AppPalette.yellow : Colors.transparent,
+  //                 borderRadius: BorderRadius.circular(999),
+  //                 // border: isSub
+  //                 //     ? Border.all(
+  //                 //         color: AppPalette.black,
+  //                 //         width: AppDims.border,
+  //                 //       )
+  //                 //     : null,
+  //               ),
+  //               child: Row(
+  //                 mainAxisAlignment: MainAxisAlignment.center,
+  //                 children: [
+  //                   const SizedBox(width: 4),
+  //                   Text(
+  //                     'サブスク',
+  //                     style: AppTypography.small(color: AppPalette.black),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Future<void> _initWithSplash() async {
     if (_initStarted) return;
@@ -510,15 +610,14 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
 
   Widget _buildMain(BuildContext context) {
     if (tenantId == null || tenantId!.isEmpty) {
-      // return const Scaffold(body: Center(child: Text('店舗が見つかりません')));
       return Scaffold(body: Center(child: Text(tr('status.not_found'))));
     }
 
-    // tenant ステータス監視（nonactive をブロック）
     final tenantDocStream = FirebaseFirestore.instance
         .collection(uid!)
         .doc(tenantId)
         .snapshots();
+
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: tenantDocStream,
       builder: (context, tSnap) {
@@ -527,7 +626,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
         }
         final tData = tSnap.data!.data();
         final status = (tData?['status'] as String?)?.toLowerCase() ?? 'active';
-        // ===== 店舗が nonactive（審査/初期設定未完了など）ならブロック表示 =====
+
         if (status == 'nonactive') {
           return Scaffold(
             backgroundColor: AppPalette.yellow,
@@ -564,14 +663,12 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      // '店舗側の登録が完了していません',
                       tr('status.store_not_ready_title'),
                       style: AppTypography.label(color: AppPalette.black),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      // '現在この店舗ではチップを受け付けていません。時間をおいて再度お試しください。',
                       tr('status.store_not_ready_desc'),
                       style: AppTypography.body(
                         color: AppPalette.textSecondary,
@@ -598,7 +695,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
           );
         }
 
-        // ===== ここから従来の UI（通常時） =====
+        // ===== ここから通常 UI =====
         final title = name ?? 'スタッフ詳細';
         final presets = const [1000, 3000, 5000, 10000];
 
@@ -638,7 +735,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
 
                 return Column(
                   children: [
-                    // ===== 上段（プロフィール・金額・送信）
+                    // ===== 上段（プロフィール＋モード切替＋単発カード or 何もなし）=====
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
                       child: Column(
@@ -678,206 +775,212 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
                               Text(title, style: AppTypography.label()),
                             ],
                           ),
+                          // const SizedBox(height: 12),
 
+                          // // モード切り替え
+                          // _buildModeSwitcher(),
                           const SizedBox(height: 10),
 
-                          // 金額カード
-                          Container(
-                            decoration: cardDecoration,
-                            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        tr("validation.value"),
-                                        style: AppTypography.body(),
-                                      ),
-                                      TextButton.icon(
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: AppPalette.black,
-                                          padding: EdgeInsets.zero,
-                                          minimumSize: const Size(0, 0),
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ),
-                                        onPressed: () => _setAmount(0),
-                                        icon: const Icon(Icons.clear, size: 20),
-                                        label: Text(
-                                          tr("validation.clear"),
-                                          style: AppTypography.body(),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppPalette.white,
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: AppPalette.black,
-                                      width: AppDims.border,
-                                    ),
-                                  ),
-                                  child: Padding(
+                          // 単発のときだけ上のカード＋送信ボタンを表示
+                          if (_mode == _TipMode.oneTime) ...[
+                            Container(
+                              decoration: cardDecoration,
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Padding(
                                     padding: const EdgeInsets.symmetric(
-                                      vertical: 8,
                                       horizontal: 12,
                                     ),
                                     child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          '¥',
-                                          style: TextStyle(
-                                            fontSize: yenFs,
-                                            fontFamily: 'LINEseed',
-                                            fontWeight: FontWeight.w700,
-                                            color: AppPalette.black,
-                                          ),
+                                          tr("validation.value"),
+                                          style: AppTypography.body(),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            _fmt(_currentAmount()),
-                                            textAlign: TextAlign.right,
-                                            style: TextStyle(
-                                              fontFamily: 'LINEseed',
-                                              fontSize: amountFs,
-                                              color: AppPalette.textPrimary,
-                                            ),
+                                        TextButton.icon(
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: AppPalette.black,
+                                            padding: EdgeInsets.zero,
+                                            minimumSize: const Size(0, 0),
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
+                                          ),
+                                          onPressed: () => _setAmount(0),
+                                          icon: const Icon(
+                                            Icons.clear,
+                                            size: 20,
+                                          ),
+                                          label: Text(
+                                            tr("validation.clear"),
+                                            style: AppTypography.body(),
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Wrap(
-                                        spacing: 2,
-                                        alignment: WrapAlignment.spaceBetween,
-                                        children: presets.map((v) {
-                                          final active = _currentAmount() == v;
-                                          return ChoiceChip(
-                                            materialTapTargetSize:
-                                                MaterialTapTargetSize
-                                                    .shrinkWrap,
-                                            label: Text(
-                                              '¥${_fmt(v)}',
-                                              style: AppTypography.small(),
-                                            ),
-                                            selected: active,
-                                            showCheckmark: false,
-                                            side: const BorderSide(
-                                              width: 0,
-                                              color: AppPalette.yellow,
-                                            ),
-                                            backgroundColor: AppPalette.yellow,
-                                            selectedColor: AppPalette.yellow,
-                                            labelStyle: TextStyle(
-                                              color: AppPalette.black,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                            onSelected: (_) => _setAmount(v),
-                                            visualDensity: const VisualDensity(
-                                              vertical: -2,
-                                              horizontal: 3,
-                                            ),
-                                          );
-                                        }).toList(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppPalette.white,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: AppPalette.black,
+                                        width: AppDims.border,
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
-                                  ],
-                                ),
-                              ],
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                        horizontal: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            '¥',
+                                            style: TextStyle(
+                                              fontSize: yenFs,
+                                              fontFamily: 'LINEseed',
+                                              fontWeight: FontWeight.w700,
+                                              color: AppPalette.black,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _fmt(_currentAmount()),
+                                              textAlign: TextAlign.right,
+                                              style: TextStyle(
+                                                fontFamily: 'LINEseed',
+                                                fontSize: amountFs,
+                                                color: AppPalette.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Wrap(
+                                          spacing: 2,
+                                          alignment: WrapAlignment.spaceBetween,
+                                          children: presets.map((v) {
+                                            final active =
+                                                _currentAmount() == v;
+                                            return ChoiceChip(
+                                              materialTapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              label: Text(
+                                                '¥${_fmt(v)}',
+                                                style: AppTypography.small(),
+                                              ),
+                                              selected: active,
+                                              showCheckmark: false,
+                                              side: const BorderSide(
+                                                width: 0,
+                                                color: AppPalette.yellow,
+                                              ),
+                                              backgroundColor:
+                                                  AppPalette.yellow,
+                                              selectedColor: AppPalette.yellow,
+                                              labelStyle: const TextStyle(
+                                                color: AppPalette.black,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                              onSelected: (_) => _setAmount(v),
+                                              visualDensity:
+                                                  const VisualDensity(
+                                                    vertical: -2,
+                                                    horizontal: 3,
+                                                  ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          SizedBox(
-                            height: sendBtnH,
-                            child: FilledButton.icon(
-                              onPressed: _loading ? null : _promptAndSendTip,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppPalette.white,
-                                foregroundColor: AppPalette.black,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  side: const BorderSide(
-                                    color: AppPalette.black,
-                                    width: AppDims.border,
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: sendBtnH,
+                              child: FilledButton.icon(
+                                onPressed: _loading ? null : _promptAndSendTip,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppPalette.white,
+                                  foregroundColor: AppPalette.black,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    side: const BorderSide(
+                                      color: AppPalette.black,
+                                      width: AppDims.border,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              label: _loading
-                                  ? Text(tr('status.processing'))
-                                  : Text(
-                                      tr("button.send_tip"),
-                                      style: AppTypography.label(),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // ===== 下段（テンキー）
-                    Expanded(
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(AppDims.radius),
-                            topRight: Radius.circular(AppDims.radius),
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 12,
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: _AmountKeypad(
-                                onTapDigit: (d) {
-                                  final curr = _currentAmount();
-                                  final next = (curr * 10 + d);
-                                  if (next <= _maxAmount) _setAmount(next);
-                                },
-                                onTapDoubleZero: () {
-                                  final curr = _currentAmount();
-                                  final next = (curr == 0) ? 0 : (curr * 100);
-                                  if (next <= _maxAmount) _setAmount(next);
-                                },
-                                onBackspace: () {
-                                  final curr = _currentAmount();
-                                  _setAmount(curr ~/ 10);
-                                },
+                                label: _loading
+                                    ? Text(tr('status.processing'))
+                                    : Text(
+                                        tr("button.send_tip"),
+                                        style: AppTypography.label(),
+                                      ),
                               ),
                             ),
                           ],
-                        ),
+                        ],
                       ),
                     ),
+
+                    const SizedBox(height: 8),
+
+                    // ===== 下段：単発はテンキー、サブスクは縦並びリスト＋確定ボタン =====
+                    if (_mode == _TipMode.oneTime) ...[
+                      Expanded(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(AppDims.radius),
+                              topRight: Radius.circular(AppDims.radius),
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          child: _AmountKeypad(
+                            onTapDigit: (d) {
+                              final curr = _currentAmount();
+                              final next = (curr * 10 + d);
+                              if (next <= _maxAmount) _setAmount(next);
+                            },
+                            onTapDoubleZero: () {
+                              final curr = _currentAmount();
+                              final next = (curr == 0) ? 0 : (curr * 100);
+                              if (next <= _maxAmount) _setAmount(next);
+                            },
+                            onBackspace: () {
+                              final curr = _currentAmount();
+                              _setAmount(curr ~/ 10);
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 );
               },

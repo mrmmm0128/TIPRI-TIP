@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:yourpay/endUser/select_onetime_or_subscription.dart';
+import 'package:yourpay/endUser/subscription_delete_page.dart';
 
 // ===== あなたの既存ページ =====
 import 'package:yourpay/endUser/tip_complete_page.dart';
@@ -137,7 +139,9 @@ class MyApp extends StatelessWidget {
 
     final staticRoutes = <String, WidgetBuilder>{
       '/': (_) => const Root(),
-      '/staff': (_) => const StaffDetailPage(),
+      '/staff': (_) => const TipModeSelectPage(),
+      '/staff_selected': (_) => const StaffDetailPage(),
+      '/subscription_delete': (_) => const SubscriptionDeletePage(),
     };
 
     final builder = staticRoutes[uri.path];

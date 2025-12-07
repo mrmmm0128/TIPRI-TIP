@@ -202,6 +202,7 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
                                       'email': email,
                                       'photoUrl': photoUrl,
                                       'uid': uid,
+                                      'direct': false,
                                     },
                                   );
                                 },
