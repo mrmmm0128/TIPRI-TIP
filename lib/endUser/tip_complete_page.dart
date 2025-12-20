@@ -62,7 +62,7 @@ class _TipCompletePageState extends State<TipCompletePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _resolveUidFromTenantIndexIfPossible();
       _reloadLinksGate();
-      await initialize(); // isC 判定も uid 必須なのでここで
+      await initialize();
     });
   }
 

@@ -84,7 +84,7 @@ class BottomInstallCtaEdgeToEdge extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 1.0,
                         color: Colors.black,
                         height: 1.0,

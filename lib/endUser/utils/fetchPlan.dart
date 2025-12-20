@@ -87,11 +87,10 @@ List<DocumentReference<Map<String, dynamic>>> _candidateTenantRefs(
 ) {
   final fs = FirebaseFirestore.instance;
   return [
-    // よくあるストレージ構造を上から順に試す（必要なら順序を入れ替えてOK）
-    fs.collection('users').doc(uid).collection('tenants').doc(tenantId),
-    fs.collection('tenantIndex').doc(tenantId),
-    fs.collection('tenants').doc(tenantId),
-
+    // // よくあるストレージ構造を上から順に試す（必要なら順序を入れ替えてOK）
+    // fs.collection('users').doc(uid).collection('tenants').doc(tenantId),
+    // fs.collection('tenantIndex').doc(tenantId),
+    // fs.collection('tenants').doc(tenantId),
     // 互換：もともとの「collection(uid)/doc(tenantId)」
     fs.collection(uid).doc(tenantId),
   ];

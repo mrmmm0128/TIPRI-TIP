@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:yourpay/endUser/subscription_tip.dart';
 import 'package:yourpay/endUser/utils/design.dart';
 import 'package:yourpay/endUser/utils/Intro_scaffold.dart';
+import 'package:yourpay/endUser/utils/fetchPlan.dart';
 import 'staff_detail_page.dart'; // StaffDetailPage を import
 
 class TipModeSelectPage extends StatefulWidget {
@@ -21,7 +22,8 @@ class _TipModeSelectPageState extends State<TipModeSelectPage> {
   String? tenantName;
   String? uid;
   bool direct = true;
-
+  bool isC = false;
+  bool _inited = false;
   bool _showIntro = true;
   bool _initStarted = false;
   static const int _minSplashMs = 2000;
@@ -37,6 +39,8 @@ class _TipModeSelectPageState extends State<TipModeSelectPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    if (_inited) return;
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
       tenantId = args['tenantId'] as String?;
@@ -47,6 +51,21 @@ class _TipModeSelectPageState extends State<TipModeSelectPage> {
       uid = args['uid'] as String?;
       direct = args['direct'] as bool? ?? true;
     }
+    if (uid != null && tenantId != null) {
+      initialize();
+    }
+    _inited = true;
+  }
+
+  Future<void> initialize() async {
+    print(uid);
+    print(tenantId);
+    final c = await fetchIsCPlanById(uid!, tenantId!);
+    //if (!mounted) return;
+    print(c);
+    setState(() {
+      isC = c;
+    });
   }
 
   Future<void> _initSplash() async {
@@ -187,20 +206,22 @@ class _TipModeSelectPageState extends State<TipModeSelectPage> {
                     _ModeCard(
                       title: '今回限りで贈る',
                       description: 'チップを都度払いで贈ることができます。',
-                      icon: Icons.flash_on,
+                      icon: Icons.currency_yen_outlined,
                       filled: true,
                       onTap: () => _goToDetail('oneTime'),
                     ),
                     const SizedBox(height: 12),
 
-                    // 「サブスクで贈る」
-                    _ModeCard(
-                      title: 'サブスクで贈る',
-                      description: 'チップを定期的に贈ることができます。',
-                      icon: Icons.repeat,
-                      filled: false,
-                      onTap: () => _goToDetail('subscription'),
-                    ),
+                    if (isC) ...[
+                      // 「サブスクで贈る」
+                      _ModeCard(
+                        title: 'サブスクで贈る',
+                        description: 'チップを定期的に贈ることができます。',
+                        icon: Icons.currency_yen_outlined,
+                        filled: false,
+                        onTap: () => _goToDetail('subscription'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -256,7 +277,11 @@ class _ModeCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, color: filled ? AppPalette.yellow : AppPalette.black),
+            Icon(
+              icon,
+              color: filled ? AppPalette.yellow : AppPalette.black,
+              size: 32,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

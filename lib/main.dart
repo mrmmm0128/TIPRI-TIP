@@ -211,12 +211,13 @@ class Root extends StatelessWidget {
           '/staff',
           '/p',
           '/payer',
+          '/subscription_delete', // ★ 追加
         };
 
         if (publicPaths.contains(path)) {
           switch (path) {
             case '/staff':
-              return const StaffDetailPage();
+              return const TipModeSelectPage();
             case '/p':
               return const PublicStorePage();
             case '/payer':
@@ -224,6 +225,9 @@ class Root extends StatelessWidget {
             case '/qr-all':
             case '/qr-all/qr-builder':
               return const _PlaceholderScaffold(title: 'QR Builder');
+
+            case '/subscription_delete': // ★ 追加
+              return const SubscriptionDeletePage();
           }
         }
 

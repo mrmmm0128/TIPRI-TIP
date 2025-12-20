@@ -134,22 +134,31 @@ class PublicStorePageState extends State<PublicStorePage> {
   final _searchCtrl = TextEditingController();
   String _query = '';
 
-  // ▼ 変更：表示件数トグルは ValueNotifier で管理（外側を再構築しない）
+  // 表示件数トグル（今後メンバー一覧側で使う用として保持）
   final ValueNotifier<bool> _showAllMembersVN = ValueNotifier<bool>(false);
 
   final _scrollController = ScrollController();
   bool _showIntro = true; // 最初はローディング画面
 
-  // ▼ 追加：進捗管理
+  // 進捗管理
   int _progress = 0; // 0..100
   bool _initStarted = false; // 二重実行防止
   static const int _minSplashMs = 1200; // 最低表示時間（体感向上）
 
+  /// Firestore Streams（init 後に一度だけ生成して再利用）
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _tenantDocStream;
+  Stream<QuerySnapshot>? _tipsStream;
+
+  /// 「直近90日」の開始日時（initState 時に固定）
+  late final DateTime _tipsSince;
+
   @override
   void initState() {
     super.initState();
+
+    _tipsSince = DateTime.now().subtract(const Duration(days: 90));
+
     _searchCtrl.addListener(() {
-      // 検索変更は最小限の再構築でOK（ここは setState で検索欄とリストを更新）
       setState(() => _query = _searchCtrl.text.trim().toLowerCase());
     });
   }
@@ -165,7 +174,6 @@ class PublicStorePageState extends State<PublicStorePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 事前に一度だけ初期化
     _initWithProgress();
   }
 
@@ -239,7 +247,7 @@ class PublicStorePageState extends State<PublicStorePage> {
     );
   }
 
-  // 追加：クエリ取得ヘルパー（? と # 両方対応）
+  // クエリ取得ヘルパー（? と # 両方対応）
   String? _getParam(String key) {
     final v1 = Uri.base.queryParameters[key];
     if (v1 != null && v1.isNotEmpty) return v1;
@@ -269,7 +277,7 @@ class PublicStorePageState extends State<PublicStorePage> {
     // 2) URL（? と # の両方を見る）
     tenantId ??= _getParam('t');
 
-    // 3) tenantId が判明したら tenantIndex から uid を“必ず”解決
+    // 3) tenantId が判明したら tenantIndex から uid を解決
     if (tenantId != null) {
       uid = await fetchUidByTenantIndex(tenantId!);
     }
@@ -281,10 +289,30 @@ class PublicStorePageState extends State<PublicStorePage> {
           .doc(tenantId!)
           .get();
       if (doc.exists) {
-        tenantName = (doc.data()?['name'] as String?) ?? '店舗';
-        final sub = doc.data()?['subscription'] as Map<String, dynamic>?;
+        final data = doc.data();
+        tenantName = (data?['name'] as String?) ?? '店舗';
+        final sub = data?['subscription'] as Map<String, dynamic>?;
         tenantPlan = sub?['plan'] as String?;
       }
+    }
+
+    // 5) Firestore Streams を一度だけセットアップ
+    if (tenantId != null && uid != null) {
+      _tenantDocStream ??= FirebaseFirestore.instance
+          .collection(uid!)
+          .doc(tenantId!)
+          .snapshots();
+
+      _tipsStream ??= FirebaseFirestore.instance
+          .collection(uid!)
+          .doc(tenantId!)
+          .collection('tips')
+          .where('status', isEqualTo: 'succeeded')
+          .where(
+            'createdAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(_tipsSince),
+          )
+          .snapshots();
     }
 
     if (mounted) setState(() {});
@@ -359,34 +387,14 @@ class PublicStorePageState extends State<PublicStorePage> {
     final size = MediaQuery.of(context).size;
     final isNarrow = size.width < 480;
 
-    // tenantId 不明 → 404 表示（現状どおり）
-    if (tenantId == null) {
+    // tenantId / uid / Streams が不明 → 404 or 簡易エラー
+    if (tenantId == null || uid == null || _tenantDocStream == null) {
       return Scaffold(body: Center(child: Text(tr("status.not_found"))));
     }
 
-    final tenantDocStream = FirebaseFirestore.instance
-        .collection(uid!)
-        .doc(tenantId)
-        .snapshots();
-
-    // 1) 直近90日の tips を購読して合計額マップを作る
-    final since = DateTime.now().subtract(const Duration(days: 90));
-    final tipsStream = FirebaseFirestore.instance
-        .collection(uid!)
-        .doc(tenantId)
-        .collection('tips')
-        .where('status', isEqualTo: 'succeeded')
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
-        .snapshots();
-
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: tenantDocStream,
+      stream: _tenantDocStream,
       builder: (context, tSnap) {
-        // if (tSnap.connectionState == ConnectionState.waiting) {
-        //   return const Scaffold(
-        //     body: Center(child: CircularProgressIndicator()),
-        //   );
-        // }
         final tData = tSnap.data?.data();
         final status = (tData?['status'] as String?)?.toLowerCase();
         if (status == 'nonactive') {
@@ -405,7 +413,6 @@ class PublicStorePageState extends State<PublicStorePage> {
                 ),
               ],
             ),
-
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -453,6 +460,13 @@ class PublicStorePageState extends State<PublicStorePage> {
 
         final lineUrl = (tData?['c_perks.lineUrl'] as String?) ?? '';
         final googleReviewUrl = (tData?['c_perks.reviewUrl'] as String?) ?? '';
+
+        // tipsStream がまだ null の可能性を考慮
+        if (_tipsStream == null) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
         return Scaffold(
           backgroundColor: AppPalette.pageBg,
@@ -544,11 +558,11 @@ class PublicStorePageState extends State<PublicStorePage> {
                 Center(child: Text(tr('staff.ranking'))),
                 const SizedBox(height: 10),
                 StaffRankingSection(
-                  tipsStream: tipsStream,
-                  uid: uid!, // もともと使っていた uid
-                  tenantId: tenantId!, // もともと使っていた tenantId
-                  tenantName: tenantName, // もともと arguments に渡していた tenantName
-                  query: _query, // 名前検索用の文字列
+                  tipsStream: _tipsStream!,
+                  uid: uid!,
+                  tenantId: tenantId!,
+                  tenantName: tenantName,
+                  query: _query,
                 ),
 
                 // ── お店にチップ ─────────────────────────────
@@ -616,51 +630,6 @@ class PublicStorePageState extends State<PublicStorePage> {
                   ),
                 ],
 
-                // ── チップリを導入しよう（PR） ─────────────────
-                // _Sectionbar(title: tr('section.initiate2')),
-                // if (isNarrow) ...[
-                //   Padding(
-                //     padding: const EdgeInsets.symmetric(
-                //       horizontal: AppDims.pad,
-                //     ),
-                //     child: SizedBox(
-                //       height: 640,
-                //       child: ImagesScroller(
-                //         assets: const [
-                //           'assets/pdf/1.jpg',
-                //           'assets/pdf/2.jpg',
-                //           'assets/pdf/3.jpg',
-                //           'assets/pdf/4.jpg',
-                //           'assets/pdf/5.jpg',
-                //           'assets/pdf/6.jpg',
-                //           'assets/pdf/7.jpg',
-                //         ],
-                //         borderRadius: 12,
-                //       ),
-                //     ),
-                //   ),
-                // ],
-                // if (!isNarrow) ...[
-                //   Padding(
-                //     padding: const EdgeInsets.symmetric(
-                //       horizontal: AppDims.pad,
-                //     ),
-                //     child: SizedBox(
-                //       height: 640,
-                //       child: ImagesScroller(
-                //         assets: const [
-                //           'assets/pdf/PC_1.jpg',
-                //           'assets/pdf/PC_2.jpg',
-                //           'assets/pdf/PC_3.jpg',
-                //           'assets/pdf/PC_4.jpg',
-                //           'assets/pdf/PC_5.jpg',
-                //           'assets/pdf/PC_6.jpg',
-                //         ],
-                //         borderRadius: 12,
-                //       ),
-                //     ),
-                //   ),
-                // ],
                 const SizedBox(height: 10),
               ],
             ),

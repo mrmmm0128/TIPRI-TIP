@@ -26,13 +26,13 @@ class SubscriptionTipPage extends StatefulWidget {
 }
 
 class _SubscriptionTipPageState extends State<SubscriptionTipPage> {
-  static const List<int> _presets = [1000, 2500, 5000, 10000];
+  static const List<int> _presets = [1000, 3000, 5000, 10000];
   int _selected = 1000;
   static const Map<int, String> _amountToSubscriptionTipId = {
-    1000: 'チップ①', // チップ①
-    2500: 'チップ②', // チップ②
-    5000: 'チップ③', // チップ③
-    10000: 'チップ④', // チップ④
+    1000: 'tip_1', // チップ①
+    3000: 'tip_2', // チップ②
+    5000: 'tip_3', // チップ③
+    10000: 'tip_4', // チップ④
   };
 
   bool _loading = false;
@@ -143,6 +143,7 @@ class _SubscriptionTipPageState extends State<SubscriptionTipPage> {
       });
       return;
     }
+    print(subTipId);
 
     setState(() {
       _loading = true;
@@ -171,7 +172,11 @@ class _SubscriptionTipPageState extends State<SubscriptionTipPage> {
 
       final uri = Uri.parse(checkoutUrl);
 
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final ok = await launchUrl(
+        uri,
+        mode: LaunchMode.platformDefault,
+        webOnlyWindowName: '_self',
+      );
       if (!ok) {
         throw Exception('決済画面を開けませんでした');
       }
@@ -362,27 +367,10 @@ class _SubscriptionTipPageState extends State<SubscriptionTipPage> {
                                   ],
                                 ),
                                 const Spacer(),
-                                // 右側：黄色丸＋チェックマーク（選択時）
-                                Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: selected
-                                        ? AppPalette.yellow
-                                        : Colors.transparent,
-                                    border: Border.all(
-                                      color: AppPalette.black,
-                                      width: AppDims.border,
-                                    ),
-                                  ),
-                                  child: selected
-                                      ? const Icon(
-                                          Icons.check,
-                                          size: 14,
-                                          color: AppPalette.black,
-                                        )
-                                      : null,
+                                SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircleCheckMark(selected: selected),
                                 ),
                               ],
                             ),
@@ -469,5 +457,129 @@ class _SubscriptionTipPageState extends State<SubscriptionTipPage> {
       },
       child: _showIntro ? _buildIntro() : _buildMain(context),
     );
+  }
+}
+
+class ThickCheck extends StatelessWidget {
+  final Color color;
+  final double strokeWidth;
+
+  const ThickCheck({super.key, required this.color, this.strokeWidth = 3});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _ThickCheckPainter(color, strokeWidth));
+  }
+}
+
+class _ThickCheckPainter extends CustomPainter {
+  final Color color;
+  final double strokeWidth;
+
+  _ThickCheckPainter(this.color, this.strokeWidth);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    final path = Path()
+      ..moveTo(w * 0, h * 0.6) // 左下スタート
+      ..lineTo(w * 0.45, h * 0.75)
+      ..lineTo(w * 1.0, h * 0.25); // 右上へ
+
+    canvas.drawPath(path, p);
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
+}
+
+class CircleCheckMark extends StatelessWidget {
+  final bool selected;
+
+  const CircleCheckMark({super.key, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size.square(24),
+      painter: _CircleCheckPainter(
+        selected: selected,
+        borderColor: Colors.black,
+        fillColor: AppPalette.white,
+      ),
+    );
+  }
+}
+
+class _CircleCheckPainter extends CustomPainter {
+  final bool selected;
+  final Color borderColor;
+  final Color fillColor;
+
+  _CircleCheckPainter({
+    required this.selected,
+    required this.borderColor,
+    required this.fillColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    const borderStroke = 2.4;
+    const checkStroke = 3.6;
+
+    // 1) 白丸を塗る
+    final fillPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, fillPaint);
+
+    // 2) 黒い縁（外枠）
+    canvas.drawCircle(center, radius - borderStroke, fillPaint);
+
+    if (!selected) return;
+
+    // 3) 中心をちょい内側にしたチェック（フチと“繋がって見える”けど切られない）
+    final checkPaint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = checkStroke
+      ..strokeCap = StrokeCap.round;
+
+    // 線が縁で切られないように、円より少し内側に寄せた座標を使う
+    final r = radius - borderStroke - checkStroke / 2;
+
+    final path = Path()
+      ..moveTo(
+        center.dx - r * 0.6, // 左下寄り
+        center.dy + r * 0.1,
+      )
+      ..lineTo(
+        center.dx - r * 0.15, // 中央ちょい下
+        center.dy + r * 0.5,
+      )
+      ..lineTo(
+        center.dx + r * 0.7, // 右上寄り
+        center.dy - r * 0.4,
+      );
+
+    canvas.drawPath(path, checkPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CircleCheckPainter oldDelegate) {
+    return oldDelegate.selected != selected ||
+        oldDelegate.borderColor != borderColor ||
+        oldDelegate.fillColor != fillColor;
   }
 }

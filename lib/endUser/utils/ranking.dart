@@ -29,6 +29,20 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
   // 「もっとみる」状態
   final ValueNotifier<bool> _showAllMembersVN = ValueNotifier<bool>(false);
 
+  /// employees コレクションの Stream（initState で一度だけ生成）
+  late final Stream<QuerySnapshot> _employeesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _employeesStream = FirebaseFirestore.instance
+        .collection(widget.uid)
+        .doc(widget.tenantId)
+        .collection('employees')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
   @override
   void dispose() {
     _showAllMembersVN.dispose();
@@ -45,6 +59,7 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
     return StreamBuilder<QuerySnapshot>(
       stream: widget.tipsStream,
       builder: (context, tipSnap) {
+        // ---- ① チップ金額の集計（employeeId ごと） ----
         final Map<String, int> totals = {};
         if (tipSnap.hasData) {
           for (final d in tipSnap.data!.docs) {
@@ -61,13 +76,9 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
           }
         }
 
+        // ---- ② employees ストリーム（initState で生成済み） ----
         return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection(uid)
-              .doc(tenantId)
-              .collection('employees')
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
+          stream: _employeesStream,
           builder: (context, snap) {
             if (snap.hasError) {
               return Padding(
@@ -85,6 +96,8 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
             }
 
             final all = snap.data!.docs.toList();
+
+            // ---- ③ 検索キーワードでフィルタ ----
             final filtered = all.where((doc) {
               final d = doc.data() as Map<String, dynamic>;
               final nm = (d['name'] ?? '').toString().toLowerCase();
@@ -98,10 +111,12 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
               );
             }
 
+            // ---- ④ ソート（チップ総額降順 → createdAt 降順） ----
             filtered.sort((a, b) {
               final ta = totals[a.id] ?? 0;
               final tb = totals[b.id] ?? 0;
               if (tb != ta) return tb.compareTo(ta);
+
               final ca = (a.data() as Map<String, dynamic>)['createdAt'];
               final cb = (b.data() as Map<String, dynamic>)['createdAt'];
               final da = (ca is Timestamp)
@@ -113,20 +128,22 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
               return db.compareTo(da);
             });
 
-            // ① ランク母集団は「チップ>0 の人だけ」
+            // ---- ⑤ ランク計算を Map<String,int> で事前に用意（O(n)） ----
+
+            // ランク母集団は「チップ > 0 の人だけ」
             final rankedIdsByTip = filtered
                 .map((d) => d.id)
                 .where((id) => (totals[id] ?? 0) > 0)
                 .toList();
 
-            // ② ランク取得。0円なら null（=非表示）
-            int? rankOf(String id) {
-              if ((totals[id] ?? 0) <= 0) return null;
-              final idx = rankedIdsByTip.indexOf(id);
-              if (idx < 0) return null;
-              return idx + 1;
+            final Map<String, int> rankMap = {};
+            for (var i = 0; i < rankedIdsByTip.length; i++) {
+              rankMap[rankedIdsByTip[i]] = i + 1; // 1位始まり
             }
 
+            int? rankOf(String id) => rankMap[id];
+
+            // ---- ⑥ UI ----
             return Column(
               children: [
                 ValueListenableBuilder<bool>(
@@ -176,7 +193,7 @@ class _StaffRankingSectionState extends State<StaffRankingSection> {
                               final photoUrl =
                                   (data['photoUrl'] ?? '') as String;
 
-                              // ③ rankLabel は 1〜4 位のみ。0円は null（＝非表示）
+                              // 1〜4位のみラベル表示（0円 or 圏外は null）
                               final r = rankOf(id);
                               final String? rankLabel =
                                   (r != null && r >= 1 && r <= 4)
@@ -249,8 +266,7 @@ class _RankedMemberCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _RankedMemberCard({
-    super.key,
-    this.rankLabel, // ← nullable に変更
+    this.rankLabel, // ← nullable
     required this.name,
     required this.photoUrl,
     this.onTap,
@@ -277,11 +293,11 @@ class _RankedMemberCard extends StatelessWidget {
             children: [
               showRank
                   ? Text(
-                      rankLabel!, // ← 表示は順位がある時だけ
+                      rankLabel!,
                       style: AppTypography.body(color: AppPalette.black),
                     )
                   : Text(
-                      "", // ← 表示は順位がある時だけ
+                      "",
                       style: AppTypography.body(color: AppPalette.black),
                     ),
               const SizedBox(height: 4),
@@ -293,8 +309,7 @@ class _RankedMemberCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-
-              const SizedBox(height: 8), // レイアウトの目安（好みで調整）
+              const SizedBox(height: 8),
               Container(
                 width: 84,
                 height: 84,

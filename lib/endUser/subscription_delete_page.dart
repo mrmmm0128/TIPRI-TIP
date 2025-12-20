@@ -175,8 +175,8 @@ class _SubscriptionDeletePageState extends State<SubscriptionDeletePage> {
                         child: FilledButton(
                           onPressed: _loading ? null : _submit,
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppPalette.black,
-                            foregroundColor: AppPalette.white,
+                            backgroundColor: AppPalette.yellow,
+                            foregroundColor: AppPalette.black,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(18),
                               side: const BorderSide(
@@ -193,7 +193,13 @@ class _SubscriptionDeletePageState extends State<SubscriptionDeletePage> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : Text('解約申請する', style: AppTypography.label()),
+                              : Text(
+                                  '解約申請する',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontFamily: "LINEseed",
+                                  ),
+                                ),
                         ),
                       ),
 
