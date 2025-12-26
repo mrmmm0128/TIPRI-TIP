@@ -1,11 +1,9 @@
-import 'dart:ui';
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:yourpay/endUser/utils/Intro_scaffold.dart';
 import 'package:yourpay/endUser/utils/design.dart';
-// IntroScaffold を使うファイルを import 済みである前提
+import 'package:yourpay/endUser/widgets/tip_message_dialog.dart';
 
 class SubscriptionTipPage extends StatefulWidget {
   const SubscriptionTipPage({
@@ -57,82 +55,17 @@ class _SubscriptionTipPageState extends State<SubscriptionTipPage> {
   }
 
   Future<void> _showEmailDialogAndStart() async {
-    final emailCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppPalette.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(
-              color: AppPalette.black,
-              width: AppDims.border, // ★ 黒枠
-            ),
-          ),
-          title: Text(
-            'メールアドレスを入力',
-            style: AppTypography.label(color: AppPalette.black),
-          ),
-          content: Form(
-            key: formKey,
-            child: TextFormField(
-              controller: emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(hintText: 'example@mail.com'),
-              validator: (value) {
-                final v = value?.trim() ?? '';
-                if (v.isEmpty) return 'メールアドレスを入力してください';
-                final regex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-                if (!regex.hasMatch(v)) return 'メールアドレスの形式が正しくありません';
-                return null;
-              },
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: Text(
-                'キャンセル',
-                style: AppTypography.small(color: AppPalette.black),
-              ),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppPalette.yellow,
-                foregroundColor: AppPalette.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(
-                    color: AppPalette.black,
-                    width: AppDims.border,
-                  ),
-                ),
-              ),
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.of(ctx).pop(emailCtrl.text.trim());
-                }
-              },
-              child: Text(
-                '決定',
-                style: TextStyle(
-                  color: AppPalette.black,
-                  fontFamily: "LINEseed",
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    final result = await TipMessageDialog.show(
+      context,
+      showEmailField: true,
+      showNameField: true,
+      showMessageField: false,
     );
 
-    if (result == null) return;
-    await _startCheckout(payerEmail: result);
+    if (result == null || result.action != TipMessageAction.ok) return;
+    if (result.email == null || result.email!.isEmpty) return;
+
+    await _startCheckout(payerEmail: result.email!);
   }
 
   Future<void> _startCheckout({required String payerEmail}) async {
@@ -143,7 +76,6 @@ class _SubscriptionTipPageState extends State<SubscriptionTipPage> {
       });
       return;
     }
-    print(subTipId);
 
     setState(() {
       _loading = true;

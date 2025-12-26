@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
@@ -14,7 +15,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="TIPRI チップリ">
   <link rel="apple-touch-icon" href="icons/opg.png">
-  
+
 
   <!-- Theme color (page itself is light) -->
   <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
@@ -22,20 +23,8 @@
   <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light">
 
-  <!-- OGP / Twitter -->
-  <meta property="og:title" content="TIPRI チップリ">
-  <meta property="og:description" content="スタッフに感謝を気軽に伝えられるチップアプリ。社員のモチベーション向上と顧客満足度アップを同時に実現。口コミやSNS連携でファンづくりにも役立つ。">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://tipri.jp/">
-  <meta property="og:image" content="https://venerable-mermaid-fcf8c8.netlify.app/ogp.png">
-
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="TIPRI チップリ">
-  <meta name="twitter:description" content="スタッフに感謝を気軽に伝えられるチップアプリ。社員のモチベーション向上と顧客満足度アップを同時に実現。口コミやSNS連携でファンづくりにも役立つ。">
-  <meta name="twitter:image" content="https://venerable-mermaid-fcf8c8.netlify.app/ogp.png">
-
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" href="favicon.png" />
 
   <title>TIPRI チップリ</title>
 
@@ -43,14 +32,31 @@
   <link rel="preload" as="image" href="images/loader.png">
 
   <style>
-    html { -webkit-text-size-adjust: 100%; }
-    *, *::before, *::after { box-sizing: border-box; }
-    :root { color-scheme: light; }
-    html, body { background:#fff; margin:0; padding:0; }
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    :root {
+      color-scheme: light;
+    }
+
+    html,
+    body {
+      background: #fff;
+      margin: 0;
+      padding: 0;
+    }
 
     /* ===== ローダー：黒背景／中央配置 ===== */
     #app-loader {
-      position: fixed; inset: 0;
+      position: fixed;
+      inset: 0;
       background: #000;
       z-index: 9999;
       will-change: opacity;
@@ -68,7 +74,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 28px;               /* スピナーとロゴの距離（好みで） */
+      gap: 28px;
+      /* スピナーとロゴの距離（好みで） */
       color: #fff;
       text-align: center;
       padding: 24px;
@@ -77,29 +84,50 @@
 
     /* スピナー（重ねない） */
     .spinner {
-      width: 40px; height: 40px; border-radius: 50%;
-      border: 3px solid rgba(255,255,255,0.28);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.28);
       border-top-color: #fff;
       animation: spin 1s linear infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
 
     /* ロゴ */
     .loader-logo {
-      width: 164px; height: 164px;
+      width: 164px;
+      height: 164px;
       object-fit: contain;
-      user-select: none; -webkit-user-drag: none;
+      user-select: none;
+      -webkit-user-drag: none;
       display: block;
     }
 
     /* 低い画面では少し縮める */
     @media (max-height: 640px) {
-      .loader-stack { gap: 20px; padding: 16px; }
-      .spinner { width: 36px; height: 36px; }
-      .loader-logo { width: 136px; height: 136px; }
+      .loader-stack {
+        gap: 20px;
+        padding: 16px;
+      }
+
+      .spinner {
+        width: 36px;
+        height: 36px;
+      }
+
+      .loader-logo {
+        width: 136px;
+        height: 136px;
+      }
     }
   </style>
 </head>
+
 <body>
   <!-- ロード完了まで黒背景／中央にスピナー→ロゴ -->
   <div id="app-loader" aria-live="polite" aria-busy="true">
@@ -129,4 +157,5 @@
   <!-- Flutter 起動 -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
+
 </html>

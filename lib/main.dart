@@ -7,14 +7,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:yourpay/endUser/select_onetime_or_subscription.dart';
 import 'package:yourpay/endUser/subscription_delete_page.dart';
-
-// ===== あなたの既存ページ =====
 import 'package:yourpay/endUser/tip_complete_page.dart';
 import 'package:yourpay/endUser/public_store_page.dart';
 import 'package:yourpay/endUser/staff_detail_page.dart';
 import 'endUser/payer_landing_screen.dart';
 
-// ===== Firebase Web 設定 =====
 FirebaseOptions web = const FirebaseOptions(
   apiKey: 'AIzaSyAIfxdoGM5TWDVRjtfazvWZ9LnLlMnOuZ4',
   appId: '1:1005883564338:web:ad2b27b5bbd8c0993d772b',
@@ -28,10 +25,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setUrlStrategy(const HashUrlStrategy());
 
-  // 🔥 first-frame を最速で出すための簡易アプリで即起動
   runApp(const _BootstrapApp());
 
-  // 🔥 本命処理は裏で（初回描画をブロックしない）
   unawaited(_startRealApp());
 }
 
@@ -81,13 +76,12 @@ Future<void> _startRealApp() async {
   );
 }
 
-/// first-frame を最速で出すためのプレースホルダーアプリ
 class _BootstrapApp extends StatelessWidget {
   const _BootstrapApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(backgroundColor: Colors.white),
     );
@@ -142,6 +136,7 @@ class MyApp extends StatelessWidget {
       '/staff': (_) => const TipModeSelectPage(),
       '/staff_selected': (_) => const StaffDetailPage(),
       '/subscription_delete': (_) => const SubscriptionDeletePage(),
+      '/tip-complete': (_) => const TipCompletePage(tenantId: ''),
     };
 
     final builder = staticRoutes[uri.path];
@@ -187,12 +182,6 @@ class Root extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snap) {
-        // if (snap.connectionState == ConnectionState.waiting) {
-        //   return const Scaffold(
-        //     body: Center(child: CircularProgressIndicator()),
-        //   );
-        // }
-
         String currentPath() {
           final uri = Uri.base;
           if (uri.fragment.isNotEmpty) {
@@ -211,7 +200,8 @@ class Root extends StatelessWidget {
           '/staff',
           '/p',
           '/payer',
-          '/subscription_delete', // ★ 追加
+          '/subscription_delete',
+          '/tip-complete',
         };
 
         if (publicPaths.contains(path)) {
@@ -225,9 +215,10 @@ class Root extends StatelessWidget {
             case '/qr-all':
             case '/qr-all/qr-builder':
               return const _PlaceholderScaffold(title: 'QR Builder');
-
-            case '/subscription_delete': // ★ 追加
+            case '/subscription_delete':
               return const SubscriptionDeletePage();
+            case '/tip-complete':
+              return const TipCompletePage();
           }
         }
 
@@ -236,7 +227,7 @@ class Root extends StatelessWidget {
           return const PublicStorePage();
         }
 
-        return const _PlaceholderScaffold(title: 'Home (signed in)');
+        return const _PlaceholderScaffold(title: 'Home');
       },
     );
   }

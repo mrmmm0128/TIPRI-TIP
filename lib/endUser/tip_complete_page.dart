@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -14,7 +13,7 @@ import 'package:yourpay/endUser/utils/yellow_action_buttom.dart';
 
 class TipCompletePage extends StatefulWidget {
   /// Navigator で最低限 tenantId は渡す想定（URL直叩きでも拾えるようにハイブリッド対応済）
-  final String tenantId;
+  final String? tenantId;
   final String? tenantName;
   final int? amount;
   final String? employeeName;
@@ -22,7 +21,7 @@ class TipCompletePage extends StatefulWidget {
 
   const TipCompletePage({
     super.key,
-    required this.tenantId,
+    this.tenantId,
     this.tenantName,
     this.amount,
     this.employeeName,

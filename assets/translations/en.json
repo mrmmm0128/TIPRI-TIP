@@ -4,7 +4,13 @@
   "dialog": {
     "edit_message_title": "Add a message",
     "send_message_title": "Send a message!",
-    "message_hint": "(Optional) A short message to the staff"
+    "message_hint": "(Optional) A short message to the staff",
+    "name_hint": "Please enter your name",
+    "name_label": "Name",
+    "email_label": "Email address",
+    "email_hint": "example@mail.com",
+    "email_required": "Please enter your email address",
+    "email_invalid": "Invalid email format"
   },
   "app_title": "Tip App",
   "store0": "Store",
@@ -75,8 +81,7 @@
     "play_failed": "Unable to play the video\n{error}"
   },
   "hint": {
-  "swipe_toggle": "Swipe horizontally to switch view",
-  "swipe_scroll": "Swipe to scroll"
-}
-
+    "swipe_toggle": "Swipe horizontally to switch view",
+    "swipe_scroll": "Swipe to scroll"
+  }
 }

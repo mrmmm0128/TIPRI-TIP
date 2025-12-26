@@ -6,7 +6,13 @@
   "dialog": {
     "edit_message_title": "新增留言",
     "send_message_title": "送出留言！",
-    "message_hint": "（選填）給員工的一句話"
+    "message_hint": "（選填）給員工的一句話",
+    "name_hint": "請輸入您的姓名",
+    "name_label": "姓名",
+    "email_label": "電子郵件",
+    "email_hint": "example@mail.com",
+    "email_required": "請輸入電子郵件地址",
+    "email_invalid": "電子郵件格式不正確"
   },
   "staff": {
     "number": "第{rank}名",
@@ -70,14 +76,12 @@
     "initiate22": "加入官方 LINE",
     "thanks_from_store": "來自店舖的訊息",
     "no_video": "目前沒有可播放的影片"
-    
   },
   "video": {
     "play_failed": "無法播放影片\n{error}"
   },
   "hint": {
-  "swipe_toggle": "左右滑動以切換顯示",
-  "swipe_scroll": "滑動以滾動"
-}
-
+    "swipe_toggle": "左右滑動以切換顯示",
+    "swipe_scroll": "滑動以滾動"
+  }
 }

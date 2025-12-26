@@ -1,12 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:yourpay/endUser/utils/BottomInstallCta.dart';
 import 'package:yourpay/endUser/utils/design.dart';
 import 'package:yourpay/endUser/utils/fetchUidByTenantId.dart';
-import 'package:yourpay/endUser/utils/image_scrol.dart';
 import 'package:yourpay/endUser/utils/ranking.dart';
 import 'package:yourpay/endUser/utils/store_tip_bottomsheet.dart';
 import 'package:yourpay/endUser/utils/yellow_action_buttom.dart';
@@ -143,7 +141,7 @@ class PublicStorePageState extends State<PublicStorePage> {
   // 進捗管理
   int _progress = 0; // 0..100
   bool _initStarted = false; // 二重実行防止
-  static const int _minSplashMs = 1200; // 最低表示時間（体感向上）
+  static const int _minSplashMs = 500; // 最低表示時間（体感向上）
 
   /// Firestore Streams（init 後に一度だけ生成して再利用）
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _tenantDocStream;
@@ -383,9 +381,6 @@ class PublicStorePageState extends State<PublicStorePage> {
         ),
       );
     }
-
-    final size = MediaQuery.of(context).size;
-    final isNarrow = size.width < 480;
 
     // tenantId / uid / Streams が不明 → 404 or 簡易エラー
     if (tenantId == null || uid == null || _tenantDocStream == null) {

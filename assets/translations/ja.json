@@ -1,59 +1,60 @@
-{"introduction": "導入はこちら",
-"staff_detail_title": "スタッフ詳細",
+{
+    "introduction": "導入はこちら",
+    "staff_detail_title": "スタッフ詳細",
     "app_title": "チップアプリ",
-    "store0": "店舗", 
-    "staff" : {
-        "number" : "第{rank}位",
-        "ranking" : "累計チップ受取額ランキング"
+    "store0": "店舗",
+    "staff": {
+        "number": "第{rank}位",
+        "ranking": "累計チップ受取額ランキング"
     },
     "section": {
         "members": "スタッフにチップを贈ろう",
         "store": "お店にチップを贈ろう",
-        "initiate1" : "ご協力お願いします",
-        "initiate2" : "チップリを導入しよう"
+        "initiate1": "ご協力お願いします",
+        "initiate2": "チップリを導入しよう"
     },
     "button": {
-        "send_tip" : "チップを贈る",
-        "send_tip_for_store" : "お店にチップを贈る",
-        "LINE" : "公式LINEに登録する",
-        "Google_review" : "Googleの口コミに投稿する",
-        "search_staff" : "名前で検索する",
-        "see_more" : "もっと見る",
-        "close" : "閉じる",
-        "cancel" : "キャンセル",
+        "send_tip": "チップを贈る",
+        "send_tip_for_store": "お店にチップを贈る",
+        "LINE": "公式LINEに登録する",
+        "Google_review": "Googleの口コミに投稿する",
+        "search_staff": "名前で検索する",
+        "see_more": "もっと見る",
+        "close": "閉じる",
+        "cancel": "キャンセル",
         "clear": "クリア",
-    "save": "保存",
-    "back": "戻る",
-    "skip": "スキップ",
-    "send": "送信"
+        "save": "保存",
+        "back": "戻る",
+        "skip": "スキップ",
+        "send": "送信"
     },
     "status": {
         "processing": "処理中...",
-        "no_staff" : "該当するスタッフがいません",
-        "not_found" : "店舗が見つかりません（URLをご確認ください）",
+        "no_staff": "該当するスタッフがいません",
+        "not_found": "店舗が見つかりません（URLをご確認ください）",
         "staff_unknown": "スタッフ情報が不明です",
-    "load_failed": "読み込みに失敗しました",
-    "store_not_ready_title": "店舗側の登録が完了していません",
-    "store_not_ready_desc": "現在この店舗ではチップを受け付けていません。時間をおいて再度お試しください。",
-    "store_info_missing": "店舗情報が取得できませんでした（t/tenantId が必要）"
+        "load_failed": "読み込みに失敗しました",
+        "store_not_ready_title": "店舗側の登録が完了していません",
+        "store_not_ready_desc": "現在この店舗ではチップを受け付けていません。時間をおいて再度お試しください。",
+        "store_info_missing": "店舗情報が取得できませんでした（t/tenantId が必要）"
     },
     "validation": {
         "tip": {
             "min": "チップは100円から贈ることができます",
             "max": "金額が大きすぎます（最大100万円）"
         },
-    "value": "チップ金額",
-    "clear": "クリア"
+        "value": "チップ金額",
+        "clear": "クリア"
     },
-    "stripe" : {
-        "attention" : "1~1,000,000 円で入力してください",
-        "miss_URL" : "決済URLの取得に失敗しました",
-        "error" : "エラー: {}",
-        "tip_for_store" : "お店にチップを送る",
-        "tip_for_store1" : "{tenantName}にチップを送る"
+    "stripe": {
+        "attention": "1~1,000,000 円で入力してください",
+        "miss_URL": "決済URLの取得に失敗しました",
+        "error": "エラー: {}",
+        "tip_for_store": "お店にチップを送る",
+        "tip_for_store1": "{tenantName}にチップを送る"
     },
-    "success_page" : {
-        "title" : "送金成功",
+    "success_page": {
+        "title": "送金成功",
         "store": "お店",
         "initiate1": "他のスタッフにもチップを送る",
         "success": "チップを送金しました",
@@ -66,16 +67,21 @@
         "no_video": "動画がまだ用意されていません"
     },
     "dialog": {
-    "edit_message_title": "メッセージを添える",
-    "send_message_title": "メッセージを贈ろう！",
-    "message_hint": "（任意）スタッフへ一言メッセージ"
-  },
-  "video": {
-    "play_failed": "再生できませんでした\n{error}"
-  },
-  "hint": {
-  "swipe_toggle": "横にスワイプして表示を切り替え",
-  "swipe_scroll": "スワイプでスクロール"
-}
-    
+        "edit_message_title": "メッセージを添える",
+        "send_message_title": "メッセージを贈ろう！",
+        "message_hint": "（任意）スタッフへ一言メッセージ",
+        "name_hint": "名前を入力してください",
+        "name_label": "名前",
+        "email_label": "メールアドレス",
+        "email_hint": "example@mail.com",
+        "email_required": "メールアドレスを入力してください",
+        "email_invalid": "メールアドレスの形式が正しくありません"
+    },
+    "video": {
+        "play_failed": "再生できませんでした\n{error}"
+    },
+    "hint": {
+        "swipe_toggle": "横にスワイプして表示を切り替え",
+        "swipe_scroll": "スワイプでスクロール"
+    }
 }

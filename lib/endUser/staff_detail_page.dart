@@ -6,15 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:yourpay/endUser/utils/Intro_scaffold.dart';
 import 'package:yourpay/endUser/utils/design.dart';
-import 'package:yourpay/endUser/utils/fetchPlan.dart'; // fetchPlanStringById を使う
+import 'package:yourpay/endUser/utils/fetchPlan.dart';
+import 'package:yourpay/endUser/widgets/tip_message_dialog.dart';
 
 class StaffDetailPage extends StatefulWidget {
   const StaffDetailPage({super.key});
   @override
   State<StaffDetailPage> createState() => _StaffDetailPageState();
 }
-
-enum _CommentAction { cancel, skip, ok }
 
 enum _TipMode { oneTime, subscription }
 
@@ -28,16 +27,17 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
   String? uid;
   bool direct = true;
   String _fmt(int n) => n.toString();
-  bool _allowMessage = false; // ← B/Cのみ true
+  bool _allowMessage = false;
   final _amountCtrl = TextEditingController(text: '0');
   bool _loading = false;
-  final _messageCtrl = TextEditingController();
   String? _senderMessage;
+  String? _senderName;
   static const int _maxMessageLength = 200;
+  static const int _maxNameLength = 50;
   static const int _maxAmount = 1000000;
   bool _showIntro = true;
   bool _initStarted = false;
-  static const int _minSplashMs = 3000;
+  static const int _minSplashMs = 2000;
   _TipMode _mode = _TipMode.oneTime;
   //int _subAmount = 1000; // サブスク用の選択金額
 
@@ -76,7 +76,6 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
   @override
   void dispose() {
     _amountCtrl.dispose();
-    _messageCtrl.dispose();
     super.dispose();
   }
 
@@ -84,97 +83,6 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     final v = int.tryParse(_amountCtrl.text) ?? 0;
     return v.clamp(0, _maxAmount);
   }
-
-  // Widget _buildModeSwitcher() {
-  //   final isSub = _mode == _TipMode.subscription;
-
-  //   return Container(
-  //     padding: const EdgeInsets.all(4),
-  //     decoration: BoxDecoration(
-  //       color: AppPalette.white,
-  //       borderRadius: BorderRadius.circular(999),
-  //       border: Border.all(color: AppPalette.black, width: AppDims.border),
-  //     ),
-  //     child: Row(
-  //       children: [
-  //         // 一度きりタブ
-  //         Expanded(
-  //           child: GestureDetector(
-  //             onTap: () {
-  //               if (_mode != _TipMode.oneTime) {
-  //                 setState(() => _mode = _TipMode.oneTime);
-  //               }
-  //             },
-  //             child: AnimatedContainer(
-  //               duration: const Duration(milliseconds: 160),
-  //               curve: Curves.easeOut,
-  //               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-  //               decoration: BoxDecoration(
-  //                 color: !isSub ? AppPalette.black : Colors.transparent,
-  //                 borderRadius: BorderRadius.circular(999),
-  //               ),
-  //               child: Row(
-  //                 mainAxisAlignment: MainAxisAlignment.center,
-  //                 children: [
-  //                   const Icon(
-  //                     Icons.flash_on,
-  //                     size: 16,
-  //                     color: AppPalette.yellow,
-  //                   ),
-  //                   const SizedBox(width: 4),
-  //                   Text(
-  //                     '一度きり',
-  //                     style: AppTypography.small(
-  //                       color: !isSub
-  //                           ? AppPalette.white
-  //                           : AppPalette.textPrimary,
-  //                     ),
-  //                   ),
-  //                 ],
-  //               ),
-  //             ),
-  //           ),
-  //         ),
-  //         const SizedBox(width: 4),
-  //         // サブスクタブ
-  //         Expanded(
-  //           child: GestureDetector(
-  //             onTap: () {
-  //               if (_mode != _TipMode.subscription) {
-  //                 setState(() => _mode = _TipMode.subscription);
-  //               }
-  //             },
-  //             child: AnimatedContainer(
-  //               duration: const Duration(milliseconds: 160),
-  //               curve: Curves.easeOut,
-  //               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-  //               decoration: BoxDecoration(
-  //                 color: isSub ? AppPalette.yellow : Colors.transparent,
-  //                 borderRadius: BorderRadius.circular(999),
-  //                 // border: isSub
-  //                 //     ? Border.all(
-  //                 //         color: AppPalette.black,
-  //                 //         width: AppDims.border,
-  //                 //       )
-  //                 //     : null,
-  //               ),
-  //               child: Row(
-  //                 mainAxisAlignment: MainAxisAlignment.center,
-  //                 children: [
-  //                   const SizedBox(width: 4),
-  //                   Text(
-  //                     'サブスク',
-  //                     style: AppTypography.small(color: AppPalette.black),
-  //                   ),
-  //                 ],
-  //               ),
-  //             ),
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
 
   Future<void> _initWithSplash() async {
     if (_initStarted) return;
@@ -353,7 +261,6 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
     setState(() {});
   }
 
-  // 送信エントリーポイント（プランAはコメントダイアログをスキップ）
   Future<void> _promptAndSendTip() async {
     if (tenantId == null || employeeId == null) {
       ScaffoldMessenger.of(
@@ -377,175 +284,28 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
 
     if (!_allowMessage) {
       _senderMessage = null;
+      _senderName = null;
       await _sendTip();
       return;
     }
 
-    _messageCtrl.text = _senderMessage ?? '';
-    final result = await showDialog<_CommentAction>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => Theme(
-        data: Theme.of(context).copyWith(
-          dialogBackgroundColor: AppPalette.white,
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-            primary: AppPalette.black,
-            surface: AppPalette.white,
-            onSurface: AppPalette.black,
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              foregroundColor: AppPalette.black,
-              textStyle: AppTypography.body(),
-            ),
-          ),
-          outlinedButtonTheme: OutlinedButtonThemeData(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppPalette.black,
-              backgroundColor: AppPalette.white,
-              side: BorderSide(color: AppPalette.black, width: AppDims.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              textStyle: AppTypography.label(),
-            ),
-          ),
-          filledButtonTheme: FilledButtonThemeData(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppPalette.black,
-              foregroundColor: AppPalette.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              textStyle: AppTypography.label(),
-            ),
-          ),
-        ),
-        // ★ ダイアログ本体の幅を固定するために SizedBox でラップ
-        child: SizedBox(
-          width: 380, // お好みで 360〜420 の範囲で
-          child: AlertDialog(
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 24,
-            ),
-            backgroundColor: AppPalette.white,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: AppPalette.black, width: AppDims.border),
-            ),
-            title: Text(
-              tr('dialog.send_message_title'),
-              style: AppTypography.label(color: AppPalette.black),
-            ),
-            // ★ content 側も最大/最小幅を制限し、TextField を4行固定に
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 360, maxWidth: 360),
-              child: SizedBox(
-                width: double.infinity,
-                child: TextField(
-                  controller: _messageCtrl,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  minLines: 4,
-                  maxLines: 4, // 高さ4行固定（超過分は内部スクロール）
-                  maxLength: _maxMessageLength,
-                  expands: false,
-                  style: AppTypography.body(color: AppPalette.black),
-                  decoration: InputDecoration(
-                    hintText: tr('dialog.message_hint'),
-                    hintStyle: AppTypography.small(
-                      color: AppPalette.textSecondary,
-                    ),
-                    filled: true,
-                    fillColor: AppPalette.white,
-                    contentPadding: const EdgeInsets.all(12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppPalette.black,
-                        width: AppDims.border,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppPalette.black,
-                        width: AppDims.border,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: AppPalette.black,
-                        width: AppDims.border2,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // ★ Row+Expanded は幅を広げるので Wrap に変更（横幅固定を崩さない）
-            actions: [
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                alignment: WrapAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.pop(context, _CommentAction.cancel),
-                    // child: const Text('戻る', ...),
-                    child: Text(
-                      tr('button.back'),
-                      style: const TextStyle(
-                        fontFamily: "LINEseed",
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  OutlinedButton(
-                    onPressed: () =>
-                        Navigator.pop(context, _CommentAction.skip),
-                    // child: const Text('スキップ', ...),
-                    child: Text(
-                      tr('button.skip'),
-                      style: const TextStyle(
-                        fontFamily: "LINEseed",
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(context, _CommentAction.ok),
-                    // child: const Text('送信', ...),
-                    child: Text(
-                      tr('button.send'),
-                      style: const TextStyle(
-                        fontFamily: "LINEseed",
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+    // 新しいダイアログクラスを使用
+    final result = await TipMessageDialog.show(
+      context,
+      initialName: _senderName,
+      initialMessage: _senderMessage,
+      maxNameLength: _maxNameLength,
+      maxMessageLength: _maxMessageLength,
     );
 
-    if (!mounted || result == null || result == _CommentAction.cancel) return;
-
-    if (result == _CommentAction.skip) {
-      _senderMessage = null;
-    } else {
-      final msg = _messageCtrl.text.trim();
-      _senderMessage = msg.isEmpty ? null : msg;
+    if (!mounted ||
+        result == null ||
+        result.action == TipMessageAction.cancel) {
+      return;
     }
+
+    _senderName = result.name;
+    _senderMessage = result.message;
 
     await _sendTip();
   }
@@ -585,6 +345,7 @@ class _StaffDetailPageState extends State<StaffDetailPage> {
         'amount': amount,
         'memo': 'Tip to ${name ?? ''}',
         'payerMessage': _allowMessage ? (_senderMessage ?? '') : '',
+        'payerName': _allowMessage ? (_senderName ?? '') : '',
       });
 
       final data = Map<String, dynamic>.from(result.data as Map);

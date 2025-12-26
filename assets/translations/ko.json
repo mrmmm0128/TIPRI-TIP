@@ -4,7 +4,13 @@
   "dialog": {
     "edit_message_title": "메시지 추가",
     "send_message_title": "메시지를 보내요!",
-    "message_hint": "(선택) 직원에게 한마디 메시지"
+    "message_hint": "(선택) 직원에게 한마디 메시지",
+    "name_hint": "이름을 입력해 주세요",
+    "name_label": "이름",
+    "email_label": "이메일 주소",
+    "email_hint": "example@mail.com",
+    "email_required": "이메일 주소를 입력해 주세요",
+    "email_invalid": "이메일 형식이 올바르지 않습니다"
   },
   "app_title": "팁 앱",
   "store0": "매장",
@@ -75,8 +81,7 @@
     "play_failed": "영상을 재생할 수 없습니다\n{error}"
   },
   "hint": {
-  "swipe_toggle": "가로로 스와이프하여 보기 전환",
-  "swipe_scroll": "스와이프하여 스크롤"
-}
-
+    "swipe_toggle": "가로로 스와이프하여 보기 전환",
+    "swipe_scroll": "스와이프하여 스크롤"
+  }
 }
